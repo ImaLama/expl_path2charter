@@ -165,7 +165,7 @@ def call_provider(
     prompt: str,
     system_prompt: str | None = None,
     temperature: float = 0.7,
-    max_tokens: int = 4096,
+    max_tokens: int = 16384,
     max_retries: int = 3,
     retry_delay: float = 2.0,
 ) -> GenerationResult:
@@ -173,7 +173,7 @@ def call_provider(
 
     Retries on transient errors. Timeout: 120s cloud, 300s local.
     """
-    timeout = 300.0 if config.key.startswith("ollama-") else 120.0
+    timeout = 300.0 if config.key.startswith("ollama-") or config.native_sdk == "anthropic" else 180.0
 
     for attempt in range(max_retries):
         try:
@@ -277,16 +277,25 @@ def _call_anthropic(
         "model": config.model,
         "max_tokens": max_tokens,
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": temperature,
     }
     if system_prompt:
         kwargs["system"] = system_prompt
+
+    # Extended thinking disabled — burns tokens even on timeout.
+    # To re-enable: uncomment below and set timeout high enough.
+    # kwargs["temperature"] = 1
+    # kwargs["thinking"] = {"type": "enabled", "budget_tokens": 8000}
 
     t0 = time.perf_counter()
     response = client.messages.create(**kwargs)
     elapsed = time.perf_counter() - t0
 
-    msg = response.content[0].text
+    # Extract text content (skip thinking blocks)
+    msg = ""
+    for block in response.content:
+        if block.type == "text":
+            msg = block.text
+            break
     return GenerationResult(
         provider=config.key,
         model=config.model,

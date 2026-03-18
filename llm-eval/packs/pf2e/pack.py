@@ -111,6 +111,62 @@ class PF2ePack(ChallengePack):
                     "at each level. Flag any uncertainties."
                 ),
             ),
+            Prompt(
+                key="goblin-thaum-champion-exemplar",
+                label="Level 8 Goblin Thaumaturge with Champion + Exemplar dedications (hard)",
+                difficulty="hard",
+                content=(
+                    "Create a level 8 Goblin Thaumaturge with Champion Dedication and one level "
+                    "in Exemplar Dedication. He should be wielding a weapon implement and a shield "
+                    "implement.\n\n"
+                    "**Requirements:**\n"
+                    "1. Full ancestry breakdown: heritage, ancestry feats (levels 1, 5)\n"
+                    "2. Background with skill training and feat\n"
+                    "3. Class: Thaumaturge with weapon implement and shield implement\n"
+                    "4. Champion Dedication archetype and any follow-up archetype feats taken at legal levels\n"
+                    "5. Exemplar Dedication archetype (one level only) taken at a legal level\n"
+                    "6. Make feat and skill choices that synergize with the overall build\n"
+                    "7. Optimize ability scores using the standard boost system through level 8 "
+                    "(including all boost stages)\n"
+                    "8. Optimize skill proficiency levels for the build\n"
+                    "9. Complete feat selection: class (1,2,4,6,8), skill (1,2,4,6,8), general (3,7), "
+                    "ancestry (1,5) — noting which slots are used for dedication/archetype feats\n"
+                    "10. Equipment loadout for level 8 (355 gp budget)\n"
+                    "11. Brief personality/backstory paragraph\n\n"
+                    "This is a complex multiclass build with TWO archetype dedications — be very "
+                    "precise about dedication feat prerequisites, the archetype feat tax, and which "
+                    "feats are available at each level. The build must comply with Pathfinder 2e "
+                    "rules in all ways. Flag any uncertainties or rule interactions that need GM adjudication."
+                ),
+            ),
+            Prompt(
+                key="goblin-thaum-champion-thrower",
+                label="Level 8 Goblin Thaumaturge with Champion dedication, throwing weapons (hard)",
+                difficulty="hard",
+                content=(
+                    "For Pathfinder 2e, create a level 8 Goblin Thaumaturge with Champion Dedication. "
+                    "He should be wielding a weapon implement and another implement (find one with good "
+                    "synergy for this build). He should be using throwing weapons.\n\n"
+                    "**Requirements:**\n"
+                    "1. Full ancestry breakdown: heritage, ancestry feats (levels 1, 5)\n"
+                    "2. Background with skill training and feat\n"
+                    "3. Class: Thaumaturge with weapon implement plus a second implement chosen for "
+                    "synergy with a throwing weapon build\n"
+                    "4. Champion Dedication archetype and any follow-up archetype feats at legal levels\n"
+                    "5. Make feat and skill choices that synergize with the overall throwing weapon build\n"
+                    "6. Optimize ability scores using the standard boost system through level 8 "
+                    "(including all boost stages)\n"
+                    "7. Optimize skill proficiency levels for the build\n"
+                    "8. Complete feat selection: class (1,2,4,6,8), skill (1,2,4,6,8), general (3,7), "
+                    "ancestry (1,5) — noting which slots are used for the Champion Dedication\n"
+                    "9. Equipment loadout for level 8 (355 gp budget) — include specific throwing weapons\n"
+                    "10. Brief personality/backstory paragraph\n\n"
+                    "Be very precise about dedication feat prerequisites, the archetype feat tax, "
+                    "and which feats are available at each level. Explain your implement and throwing "
+                    "weapon choices. The build must comply with Pathfinder 2e rules in all ways. "
+                    "Flag any uncertainties."
+                ),
+            ),
         ]
 
     def get_rubric(self) -> Rubric:
