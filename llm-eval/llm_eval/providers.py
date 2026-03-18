@@ -38,7 +38,7 @@ CLOUD_PROVIDERS: dict[str, ProviderConfig] = {
     "xai": ProviderConfig(
         key="xai",
         name="xAI Grok 4.1",
-        model="grok-4-1",
+        model="grok-3-mini",
         tier="$25 free credits",
         base_url="https://api.x.ai/v1",
         env_key="XAI_API_KEY",
@@ -230,11 +230,16 @@ def _call_openai_compatible(
     messages.append({"role": "user", "content": prompt})
 
     t0 = time.perf_counter()
+    # OpenAI GPT-5+ requires max_completion_tokens instead of max_tokens
+    if config.key == "openai":
+        token_param = {"max_completion_tokens": max_tokens}
+    else:
+        token_param = {"max_tokens": max_tokens}
     response = client.chat.completions.create(
         model=config.model,
         messages=messages,
         temperature=temperature,
-        max_tokens=max_tokens,
+        **token_param,
     )
     elapsed = time.perf_counter() - t0
 
