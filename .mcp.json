@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "pf2e-rules": {
+      "command": "/home/explorations/venv/bin/python",
+      "args": ["-m", "server.main"],
+      "cwd": "/home/explorations/path2charter/mcp-pf2e"
+    }
+  }
+}

@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+*.egg-info/
+
+# Environment
+.env
+
+# Data & output (large/generated files)
+llm-eval.tar.gz
+llm-eval/output/
+llm-eval/results/
+
+# Vector DB (generated, not source)
+vector_db/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
