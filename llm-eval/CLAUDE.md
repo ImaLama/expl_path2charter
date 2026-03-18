@@ -99,7 +99,7 @@ Phase 1 complete — framework is functional end-to-end.
 - [x] Phase 1 Step 8: combined run+score via --score flag, new-pack scaffolding
 - [x] Phase 2 Pack A: pf2e (4 prompts, 5 criteria, pure LLM-judged)
 - [x] Phase 2 Pack B: coding (5 prompts, 4 criteria + auto-scorer at 50% weight)
-- [ ] Tests
+- [x] Tests (78 total: 74 unit + 4 integration with live APIs)
 
 ## Known Constraints
 - Ollama auto-detection needs httpx for health checks
