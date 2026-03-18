@@ -25,8 +25,15 @@ def _build_individual_prompt(
     pack: ChallengePack,
     original_prompt: str,
     response_content: str,
+    verification_context: str | None = None,
 ) -> str:
-    """Build the judge prompt for individual scoring."""
+    """Build the judge prompt for individual scoring.
+
+    Args:
+        verification_context: Optional RAG-verified ground truth to inject
+            (e.g., verified/unverified feat names from a database lookup).
+            Inserted between the response and scoring rubric.
+    """
     rubric = pack.get_rubric()
 
     criteria_text = ""
@@ -34,6 +41,10 @@ def _build_individual_prompt(
         criteria_text += f"\n### {i}. {c.label} (weight: {c.weight:.0%})\n{c.description}\n"
 
     schema_text = json.dumps(rubric.output_schema, indent=2)
+
+    verification_section = ""
+    if verification_context:
+        verification_section = f"\n{verification_context}\n"
 
     return f"""{rubric.judge_preamble}
 
@@ -46,7 +57,7 @@ def _build_individual_prompt(
 <response>
 {response_content[:8000]}
 </response>
-
+{verification_section}
 ## Scoring rubric — score each criterion from 1 (terrible) to 5 (flawless):
 {criteria_text}
 
@@ -145,7 +156,17 @@ def score_individual(
         prompt_obj = prompt_map.get(r.prompt_key)
         original_prompt = prompt_obj.content if prompt_obj else r.prompt_label
 
-        judge_prompt = _build_individual_prompt(pack, original_prompt, r.content)
+        # Get verification context from auto-scorer if it supports it
+        verification_context = None
+        if auto_scorer and hasattr(auto_scorer, "get_verification_context"):
+            try:
+                verification_context = auto_scorer.get_verification_context(r)
+            except Exception:
+                pass
+
+        judge_prompt = _build_individual_prompt(
+            pack, original_prompt, r.content, verification_context
+        )
 
         try:
             raw = _call_judge(judge_provider, judge_prompt)

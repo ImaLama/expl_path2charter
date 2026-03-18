@@ -7,6 +7,8 @@ creative Pathfinder 2nd Edition character builds across varying complexity.
 
 from llm_eval.types import ChallengePack, Prompt, Rubric, ScoreCriterion, AutoScorer
 
+from .auto_scorer import PF2eAutoScorer
+
 
 class PF2ePack(ChallengePack):
 
@@ -295,10 +297,10 @@ class PF2ePack(ChallengePack):
         )
 
     def get_auto_scorer(self) -> AutoScorer | None:
-        return None
+        return PF2eAutoScorer()
 
     def get_auto_score_weight(self) -> float:
-        return 0.0
+        return 0.3
 
 
 def get_pack() -> ChallengePack:
