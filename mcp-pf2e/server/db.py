@@ -24,12 +24,31 @@ class PF2eDB:
         ollama_url: str = DEFAULT_OLLAMA_URL,
     ):
         self.client = chromadb.PersistentClient(path=db_path)
-        self.embed_fn = OllamaEmbeddingFunction(base_url=ollama_url)
+        self.ollama_url = ollama_url
+        # Cache embedding functions per model
+        self._embed_fns: dict[str, OllamaEmbeddingFunction] = {}
+
+    def _embed_fn_for(self, collection_name: str) -> OllamaEmbeddingFunction:
+        """Return the correct embedding function based on collection suffix."""
+        if collection_name.endswith("_mxbai"):
+            model = "mxbai-embed-large"
+        elif collection_name.endswith("_bgem3"):
+            model = "bge-m3"
+        elif collection_name.endswith("_nomic"):
+            model = "nomic-embed-text"
+        else:
+            # Legacy unsuffixed collections use nomic
+            model = "nomic-embed-text"
+        if model not in self._embed_fns:
+            self._embed_fns[model] = OllamaEmbeddingFunction(
+                model=model, base_url=self.ollama_url
+            )
+        return self._embed_fns[model]
 
     def _get_collection(self, source: str):
         return self.client.get_collection(
             name=source,
-            embedding_function=self.embed_fn,
+            embedding_function=self._embed_fn_for(source),
         )
 
     def search(

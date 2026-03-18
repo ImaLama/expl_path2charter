@@ -53,9 +53,14 @@ def register_tools(app: Server, db: PF2eDB):
                         },
                         "source": {
                             "type": "string",
-                            "enum": ["foundry", "pf2etools"],
+                            "enum": [
+                                "foundry", "pf2etools",
+                                "foundry_nomic", "pf2etools_nomic",
+                                "foundry_mxbai", "pf2etools_mxbai",
+                                "foundry_bgem3", "pf2etools_bgem3",
+                            ],
                             "default": "foundry",
-                            "description": "Which data source to search",
+                            "description": "Collection to search. 'foundry'/'pf2etools' are nomic-embed-text. Suffixed variants use different embedding models for comparison.",
                         },
                         "n_results": {
                             "type": "integer",
@@ -85,7 +90,12 @@ def register_tools(app: Server, db: PF2eDB):
                         },
                         "source": {
                             "type": "string",
-                            "enum": ["foundry", "pf2etools"],
+                            "enum": [
+                                "foundry", "pf2etools",
+                                "foundry_nomic", "pf2etools_nomic",
+                                "foundry_mxbai", "pf2etools_mxbai",
+                                "foundry_bgem3", "pf2etools_bgem3",
+                            ],
                             "default": "foundry",
                         },
                     },
@@ -103,7 +113,12 @@ def register_tools(app: Server, db: PF2eDB):
                     "properties": {
                         "source": {
                             "type": "string",
-                            "enum": ["foundry", "pf2etools"],
+                            "enum": [
+                                "foundry", "pf2etools",
+                                "foundry_nomic", "pf2etools_nomic",
+                                "foundry_mxbai", "pf2etools_mxbai",
+                                "foundry_bgem3", "pf2etools_bgem3",
+                            ],
                             "default": "foundry",
                         },
                     },
