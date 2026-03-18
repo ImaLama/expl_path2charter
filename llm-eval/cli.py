@@ -126,13 +126,11 @@ def cmd_score(args: argparse.Namespace) -> None:
     print(f"Loaded {len(results)} results from {results_path}")
 
     # Infer pack from results
-    prompt_keys = {r.prompt_key for r in results}
-    # Try to find the pack
     pack_name = args.pack
     if not pack_name:
-        # Guess from directory name
+        # Guess from directory name: <timestamp>_<pack_name>
         parent = results_path.parent.name
-        parts = parent.split("_", 1)
+        parts = parent.rsplit("_", 1)
         if len(parts) > 1:
             pack_name = parts[-1]
 

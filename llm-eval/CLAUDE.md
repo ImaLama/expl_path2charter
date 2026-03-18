@@ -97,8 +97,8 @@ Phase 1 complete — framework is functional end-to-end.
 - [x] Phase 1 Step 6: report.py — markdown tables + JSON scores
 - [x] Phase 1 Step 7: head-to-head bias detection (built into judge.py)
 - [x] Phase 1 Step 8: combined run+score via --score flag, new-pack scaffolding
-- [ ] Phase 2 Pack A: pf2e
-- [ ] Phase 2 Pack B: coding
+- [x] Phase 2 Pack A: pf2e (4 prompts, 5 criteria, pure LLM-judged)
+- [x] Phase 2 Pack B: coding (5 prompts, 4 criteria + auto-scorer at 50% weight)
 - [ ] Tests
 
 ## Known Constraints
