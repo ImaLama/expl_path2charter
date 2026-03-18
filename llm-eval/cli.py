@@ -105,6 +105,10 @@ def cmd_run(args: argparse.Namespace) -> None:
             print("\nRunning head-to-head comparisons...")
             h2h = score_head_to_head(valid_results, pack, judge_key)
 
+        # Log summary
+        from llm_eval.log import log_summary
+        log_summary(scores, h2h or None)
+
         # Find the run directory from the results
         run_dirs = list(output_dir.glob(f"*_{pack.name}"))
         report_dir = run_dirs[-1] if run_dirs else output_dir
@@ -145,12 +149,18 @@ def cmd_score(args: argparse.Namespace) -> None:
     print(f"Using judge: {judge_key}")
     print(f"Pack: {pack.name}\n")
 
+    # Init log in the results directory
+    from llm_eval.log import init_log, log_summary
+    init_log(results_path.parent, pack.name)
+
     scores = score_individual(valid_results, pack, judge_key)
 
     h2h = None
     if args.head_to_head:
         print("\nRunning head-to-head comparisons...")
         h2h = score_head_to_head(valid_results, pack, judge_key)
+
+    log_summary(scores, h2h or None)
 
     output_dir = results_path.parent
     generate_report(scores, h2h, pack, judge_key, output_dir)

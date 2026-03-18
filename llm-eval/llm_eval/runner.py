@@ -10,6 +10,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+from .log import init_log, log_generation
 from .providers import call_provider, get_all_providers
 from .types import ChallengePack, GenerationResult
 
@@ -45,6 +46,9 @@ def run_challenges(
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_dir = output_dir / f"{ts}_{pack.name}"
     run_dir.mkdir(parents=True, exist_ok=True)
+
+    # Initialize log
+    init_log(run_dir, pack.name)
 
     results: list[GenerationResult] = []
 
@@ -88,6 +92,7 @@ def run_challenges(
                 )
                 md_path.write_text(header + result.content)
 
+            log_generation(result)
             results.append(result)
 
         print()

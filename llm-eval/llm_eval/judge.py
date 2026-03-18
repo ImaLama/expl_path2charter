@@ -11,6 +11,7 @@ import json
 import re
 from itertools import combinations
 
+from .log import log_head_to_head, log_score
 from .providers import call_provider, get_all_providers
 from .types import (
     ChallengePack,
@@ -189,6 +190,7 @@ def score_individual(
                 output_tokens=r.output_tokens,
             )
             scores.append(score)
+            log_score(score)
             print(f"OK weighted={final_weighted:.2f}/5.00")
 
         except Exception as e:
@@ -269,6 +271,7 @@ def score_head_to_head(
                     consistency=consistency,
                     reasoning=reasoning,
                 ))
+                log_head_to_head(h2h_results[-1])
                 print(f"OK winner={final_winner} ({consistency})")
 
             except Exception as e:
