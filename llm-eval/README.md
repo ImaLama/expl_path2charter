@@ -38,10 +38,10 @@ python cli.py new-pack trivia
 ### Cloud
 | Key | Model | Free? |
 |-----|-------|-------|
-| `gemini` | Gemini 2.5 Pro | Yes, 100 req/day |
+| `gemini` | Gemini 3.1 Pro | Yes, with billing enabled |
 | `deepseek` | DeepSeek V3.2 | 5M tokens free |
 | `xai` | Grok 4.1 | $25 free credits |
-| `openai` | GPT-5.2 | $5 prepaid |
+| `openai` | GPT-5.4 | $5 prepaid |
 | `anthropic` | Claude Opus 4.6 | $5 prepaid |
 
 ### Local (Ollama)

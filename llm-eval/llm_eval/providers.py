@@ -21,8 +21,8 @@ from .types import GenerationResult, ProviderConfig
 CLOUD_PROVIDERS: dict[str, ProviderConfig] = {
     "gemini": ProviderConfig(
         key="gemini",
-        name="Google Gemini 2.5 Pro",
-        model="gemini-2.5-pro",
+        name="Google Gemini 3.1 Pro",
+        model="gemini-3.1-pro-preview",
         tier="free",
         base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
         env_key="GEMINI_API_KEY",
@@ -37,16 +37,16 @@ CLOUD_PROVIDERS: dict[str, ProviderConfig] = {
     ),
     "xai": ProviderConfig(
         key="xai",
-        name="xAI Grok 4.1",
-        model="grok-3-mini",
+        name="xAI Grok 4.20",
+        model="grok-4.20-beta-0309-non-reasoning",
         tier="$25 free credits",
         base_url="https://api.x.ai/v1",
         env_key="XAI_API_KEY",
     ),
     "openai": ProviderConfig(
         key="openai",
-        name="OpenAI GPT-5.2",
-        model="gpt-5.2",
+        name="OpenAI GPT-5.4",
+        model="gpt-5.4",
         tier="$5 prepaid",
         base_url="https://api.openai.com/v1",
         env_key="OPENAI_API_KEY",
