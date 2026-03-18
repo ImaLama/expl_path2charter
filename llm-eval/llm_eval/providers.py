@@ -168,8 +168,14 @@ def call_provider(
     max_tokens: int = 16384,
     max_retries: int = 3,
     retry_delay: float = 2.0,
+    search: bool = False,
 ) -> GenerationResult:
     """Call a provider and return a GenerationResult.
+
+    Args:
+        search: If True, enable web search for providers that support it.
+                Gemini uses google_search, OpenAI uses web_search,
+                xAI uses web_search. Disabled by default.
 
     Retries on transient errors. Timeout: 120s cloud, 300s local.
     """
@@ -183,7 +189,8 @@ def call_provider(
                 )
             else:
                 return _call_openai_compatible(
-                    config, prompt, system_prompt, temperature, max_tokens, timeout
+                    config, prompt, system_prompt, temperature, max_tokens, timeout,
+                    search=search,
                 )
         except Exception as e:
             if attempt < max_retries - 1:
@@ -213,6 +220,7 @@ def _call_openai_compatible(
     temperature: float,
     max_tokens: int,
     timeout: float,
+    search: bool = False,
 ) -> GenerationResult:
     """Call a provider using the OpenAI-compatible API."""
     if config.key.startswith("ollama-"):
@@ -221,6 +229,14 @@ def _call_openai_compatible(
     else:
         base_url = config.base_url
         api_key = os.getenv(config.env_key or "", "")
+
+    # Provider-specific search implementations (each uses a different API)
+    if search and config.key == "openai":
+        return _call_openai_with_search(config, prompt, system_prompt, max_tokens, api_key, timeout)
+    if search and config.key == "gemini":
+        return _call_gemini_with_search(config, prompt, system_prompt, max_tokens, timeout)
+    # xAI search not yet supported — their web_search tool requires a different
+    # API format that isn't compatible with chat completions. Skipping for now.
 
     client = OpenAI(base_url=base_url, api_key=api_key, timeout=timeout)
 
@@ -235,6 +251,7 @@ def _call_openai_compatible(
         token_param = {"max_completion_tokens": max_tokens}
     else:
         token_param = {"max_tokens": max_tokens}
+
     response = client.chat.completions.create(
         model=config.model,
         messages=messages,
@@ -256,6 +273,174 @@ def _call_openai_compatible(
         elapsed_s=round(elapsed, 2),
         input_tokens=getattr(usage, "prompt_tokens", None),
         output_tokens=getattr(usage, "completion_tokens", None),
+    )
+
+
+def _call_openai_with_search(
+    config: ProviderConfig,
+    prompt: str,
+    system_prompt: str | None,
+    max_tokens: int,
+    api_key: str,
+    timeout: float,
+) -> GenerationResult:
+    """Call OpenAI using the Responses API with web_search tool."""
+    import httpx
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    body: dict = {
+        "model": config.model,
+        "tools": [{"type": "web_search"}],
+        "input": prompt,
+        "max_output_tokens": max_tokens,
+    }
+    if system_prompt:
+        body["instructions"] = system_prompt
+
+    t0 = time.perf_counter()
+    resp = httpx.post(
+        "https://api.openai.com/v1/responses",
+        headers=headers,
+        json=body,
+        timeout=timeout,
+    )
+    resp.raise_for_status()
+    elapsed = time.perf_counter() - t0
+
+    data = resp.json()
+    # Extract text from output blocks
+    msg = ""
+    for item in data.get("output", []):
+        if item.get("type") == "message":
+            for content in item.get("content", []):
+                if content.get("type") == "output_text":
+                    msg += content.get("text", "")
+
+    usage = data.get("usage", {})
+    return GenerationResult(
+        provider=config.key,
+        model=config.model,
+        name=config.name,
+        tier=config.tier,
+        prompt_key="",
+        prompt_label="",
+        content=msg,
+        elapsed_s=round(elapsed, 2),
+        input_tokens=usage.get("input_tokens"),
+        output_tokens=usage.get("output_tokens"),
+    )
+
+
+def _call_xai_with_search(
+    config: ProviderConfig,
+    prompt: str,
+    system_prompt: str | None,
+    max_tokens: int,
+    api_key: str,
+    timeout: float,
+) -> GenerationResult:
+    """Call xAI using their API with web_search tool."""
+    import httpx
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+
+    body: dict = {
+        "model": config.model,
+        "messages": messages,
+        "tools": [{"type": "web_search"}],
+        "max_tokens": max_tokens,
+        "temperature": 0.7,
+    }
+
+    t0 = time.perf_counter()
+    resp = httpx.post(
+        "https://api.x.ai/v1/chat/completions",
+        headers=headers,
+        json=body,
+        timeout=timeout,
+    )
+    resp.raise_for_status()
+    elapsed = time.perf_counter() - t0
+
+    data = resp.json()
+    msg = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+    usage = data.get("usage", {})
+    return GenerationResult(
+        provider=config.key,
+        model=config.model,
+        name=config.name,
+        tier=config.tier,
+        prompt_key="",
+        prompt_label="",
+        content=msg,
+        elapsed_s=round(elapsed, 2),
+        input_tokens=usage.get("prompt_tokens"),
+        output_tokens=usage.get("completion_tokens"),
+    )
+
+
+def _call_gemini_with_search(
+    config: ProviderConfig,
+    prompt: str,
+    system_prompt: str | None,
+    max_tokens: int,
+    timeout: float,
+) -> GenerationResult:
+    """Call Gemini using its native REST API with google_search tool."""
+    import httpx
+
+    api_key = os.getenv(config.env_key or "", "")
+    full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+
+    body: dict = {
+        "contents": [{"parts": [{"text": full_prompt}]}],
+        "tools": [{"google_search": {}}],
+        "generationConfig": {
+            "temperature": 0.7,
+            "maxOutputTokens": max_tokens,
+        },
+    }
+
+    t0 = time.perf_counter()
+    resp = httpx.post(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{config.model}:generateContent",
+        params={"key": api_key},
+        json=body,
+        timeout=timeout,
+    )
+    resp.raise_for_status()
+    elapsed = time.perf_counter() - t0
+
+    data = resp.json()
+    # Extract text from candidates
+    msg = ""
+    for candidate in data.get("candidates", []):
+        for part in candidate.get("content", {}).get("parts", []):
+            if "text" in part:
+                msg += part["text"]
+
+    usage = data.get("usageMetadata", {})
+    return GenerationResult(
+        provider=config.key,
+        model=config.model,
+        name=config.name,
+        tier=config.tier,
+        prompt_key="",
+        prompt_label="",
+        content=msg,
+        elapsed_s=round(elapsed, 2),
+        input_tokens=usage.get("promptTokenCount"),
+        output_tokens=usage.get("candidatesTokenCount"),
     )
 
 

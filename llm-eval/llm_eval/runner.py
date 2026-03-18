@@ -20,6 +20,7 @@ def run_challenges(
     pack: ChallengePack,
     output_dir: Path,
     prompt_keys: list[str] | None = None,
+    search: bool = False,
 ) -> list[GenerationResult]:
     """Run all prompts from a pack against the given providers.
 
@@ -68,7 +69,8 @@ def run_challenges(
             print(f"  {cfg.name:.<45} ", end="", flush=True)
 
             result = call_provider(
-                cfg, prompt.content, system_prompt=system_prompt
+                cfg, prompt.content, system_prompt=system_prompt,
+                search=search,
             )
             # Fill in prompt info
             result.prompt_key = prompt.key

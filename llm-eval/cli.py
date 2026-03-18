@@ -80,8 +80,13 @@ def cmd_run(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     output_dir = Path(args.output_dir)
+    search = getattr(args, 'search', False)
+    if search:
+        print("Web search ENABLED for providers that support it\n")
+
     results = run_challenges(
-        provider_keys, pack, output_dir, prompt_keys=args.prompt_keys
+        provider_keys, pack, output_dir, prompt_keys=args.prompt_keys,
+        search=search,
     )
 
     # Optional scoring
@@ -227,6 +232,10 @@ def main() -> None:
     )
     run_parser.add_argument(
         "--output-dir", type=str, default="results", help="Results directory"
+    )
+    run_parser.add_argument(
+        "--search", action="store_true",
+        help="Enable web search for providers that support it (gemini, openai, xai)"
     )
 
     # score

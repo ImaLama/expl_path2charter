@@ -47,7 +47,7 @@ class TestGetPackByName:
     def test_find_pf2e(self):
         pack = get_pack_by_name("pf2e")
         assert pack is not None
-        assert len(pack.get_prompts()) == 4
+        assert len(pack.get_prompts()) == 6
 
     def test_find_coding(self):
         pack = get_pack_by_name("coding")
