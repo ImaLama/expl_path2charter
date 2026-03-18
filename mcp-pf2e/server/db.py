@@ -53,9 +53,8 @@ class PF2eDB:
             where_clauses.append({"level": {"$gte": level_min}})
         if level_max is not None:
             where_clauses.append({"level": {"$lte": level_max}})
-        if traits:
-            for trait in traits:
-                where_clauses.append({"traits": {"$contains": trait}})
+        # Note: traits are stored comma-separated. $contains doesn't work
+        # on strings in this ChromaDB version, so we post-filter traits.
 
         where = None
         if len(where_clauses) == 1:
@@ -63,9 +62,14 @@ class PF2eDB:
         elif len(where_clauses) > 1:
             where = {"$and": where_clauses}
 
+        # Over-fetch if we need to post-filter by traits
+        fetch_n = min(n_results, 20)
+        if traits:
+            fetch_n = min(n_results * 5, 100)
+
         results = collection.query(
             query_texts=[query],
-            n_results=min(n_results, 20),
+            n_results=fetch_n,
             where=where,
             include=["documents", "metadatas", "distances"],
         )
@@ -74,17 +78,26 @@ class PF2eDB:
         if results["ids"] and results["ids"][0]:
             for i, doc_id in enumerate(results["ids"][0]):
                 meta = results["metadatas"][0][i]
+                entry_traits = meta.get("traits", "").split(",") if meta.get("traits") else []
+
+                # Post-filter by traits if requested
+                if traits:
+                    if not all(t in entry_traits for t in traits):
+                        continue
+
                 items.append({
                     "name": meta.get("name", ""),
                     "content_type": meta.get("content_type", ""),
                     "level": meta.get("level", 0),
-                    "traits": meta.get("traits", "").split(",") if meta.get("traits") else [],
+                    "traits": entry_traits,
                     "prerequisites": meta.get("prerequisites", ""),
                     "source_book": meta.get("source_book", ""),
                     "rarity": meta.get("rarity", "common"),
                     "relevance_score": round(1 - results["distances"][0][i], 4),
                     "text": results["documents"][0][i],
                 })
+                if len(items) >= n_results:
+                    break
         return items
 
     def get_entry(

@@ -22,7 +22,7 @@ def load_documents(
         try:
             client.delete_collection(collection_name)
             print(f"  Wiped collection: {collection_name}")
-        except ValueError:
+        except Exception:
             pass
 
     collection = client.get_or_create_collection(
