@@ -98,6 +98,18 @@ LOCAL_PROVIDERS: dict[str, ProviderConfig] = {
         model="deepseek-r1:32b",
         tier="local",
     ),
+    "ollama-qwen3-32b": ProviderConfig(
+        key="ollama-qwen3-32b",
+        name="Qwen 3 32B (local)",
+        model="qwen3:32b",
+        tier="local",
+    ),
+    "ollama-llama3.3": ProviderConfig(
+        key="ollama-llama3.3",
+        name="Llama 3.3 70B (local)",
+        model="llama3.3:70b",
+        tier="local",
+    ),
 }
 
 ALL_PROVIDERS: dict[str, ProviderConfig] = {**CLOUD_PROVIDERS, **LOCAL_PROVIDERS}
@@ -133,6 +145,25 @@ def _check_ollama_model(model: str) -> tuple[bool, str]:
     except Exception:
         return False, "Ollama not running"
     return False, "Ollama not running"
+
+
+def _search_and_augment(prompt: str, system_prompt: str | None, max_results: int = 5) -> str:
+    """Search the web and prepend results as context to the prompt."""
+    from duckduckgo_search import DDGS
+
+    query = prompt[:200].replace("\n", " ")
+
+    with DDGS() as ddgs:
+        results = list(ddgs.text(query, max_results=max_results))
+
+    if not results:
+        return prompt
+
+    context = "## Web search results (use as reference):\n\n"
+    for r in results:
+        context += f"**{r['title']}**: {r['body']}\n\n"
+
+    return f"{context}\n---\n\n{prompt}"
 
 
 # ---------------------------------------------------------------------------
@@ -229,6 +260,11 @@ def _call_openai_compatible(
     else:
         base_url = config.base_url
         api_key = os.getenv(config.env_key or "", "")
+
+    # Search-augmented prompt for Ollama (no native search support)
+    if search and config.key.startswith("ollama-"):
+        prompt = _search_and_augment(prompt, system_prompt)
+        search = False
 
     # Provider-specific search implementations (each uses a different API)
     if search and config.key == "openai":
