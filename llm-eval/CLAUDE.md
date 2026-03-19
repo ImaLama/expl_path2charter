@@ -105,3 +105,7 @@ Phase 1 complete — framework is functional end-to-end.
 - Ollama auto-detection needs httpx for health checks
 - Some providers (Gemini) have rate limits on free tier — runner should handle retries
 - Code execution in coding pack AutoScorer must be sandboxed (subprocess, timeout, tempfile)
+- **Never run two local (Ollama) models concurrently** — GPU VRAM is shared and loading
+  a second large model will OOM or thrash. The runner handles this by running providers
+  sequentially, but never launch parallel CLI invocations targeting different local models.
+  Small models (<8B) may coexist but large ones (32B+, 70B+) cannot.

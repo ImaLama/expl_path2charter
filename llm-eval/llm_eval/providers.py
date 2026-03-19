@@ -107,7 +107,7 @@ LOCAL_PROVIDERS: dict[str, ProviderConfig] = {
     "ollama-llama3.3": ProviderConfig(
         key="ollama-llama3.3",
         name="Llama 3.3 70B (local)",
-        model="llama3.3:70b",
+        model="llama3.3-8k",
         tier="local",
     ),
 }
@@ -145,6 +145,41 @@ def _check_ollama_model(model: str) -> tuple[bool, str]:
     except Exception:
         return False, "Ollama not running"
     return False, "Ollama not running"
+
+
+def _ensure_ollama_model_loaded(model: str) -> None:
+    """Unload other large models before loading a new one.
+
+    Ollama shares GPU VRAM — two 32B+ models can't coexist.
+    This checks what's loaded and unloads anything else first.
+    """
+    try:
+        import httpx
+        base = _get_ollama_native_url()
+        resp = httpx.get(f"{base}/api/ps", timeout=5)
+        if resp.status_code != 200:
+            return
+
+        loaded = resp.json().get("models", [])
+        model_base = model.split(":")[0]
+
+        for m in loaded:
+            loaded_name = m.get("model", "")
+            if model_base in loaded_name:
+                # Already loaded, nothing to do
+                return
+
+        # Unload any other models to free VRAM
+        for m in loaded:
+            loaded_name = m.get("model", "")
+            print(f"    [ollama] Unloading {loaded_name} to free VRAM...")
+            httpx.post(
+                f"{base}/api/chat",
+                json={"model": loaded_name, "messages": [], "keep_alive": 0},
+                timeout=30,
+            )
+    except Exception:
+        pass  # Best-effort — don't block the run
 
 
 def _search_and_augment(prompt: str, system_prompt: str | None, max_results: int = 5) -> str:
@@ -255,6 +290,7 @@ def _call_openai_compatible(
 ) -> GenerationResult:
     """Call a provider using the OpenAI-compatible API."""
     if config.key.startswith("ollama-"):
+        _ensure_ollama_model_loaded(config.model)
         base_url = _get_ollama_url()
         api_key = "ollama"
     else:
@@ -288,11 +324,17 @@ def _call_openai_compatible(
     else:
         token_param = {"max_tokens": max_tokens}
 
+    # Ollama: limit context window to avoid massive KV cache eating VRAM
+    extra = {}
+    if config.key.startswith("ollama-"):
+        extra["extra_body"] = {"options": {"num_ctx": 8192}}
+
     response = client.chat.completions.create(
         model=config.model,
         messages=messages,
         temperature=temperature,
         **token_param,
+        **extra,
     )
     elapsed = time.perf_counter() - t0
 
