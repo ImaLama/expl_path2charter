@@ -3,6 +3,39 @@
 import json
 
 from query.types import BuildOptions, SlotOptions
+from query.static_reader import list_available_classes, list_available_ancestries
+
+
+_SKELETON_SYSTEM_PROMPT = """\
+You are an expert Pathfinder 2nd Edition character builder. Given a character concept, \
+choose the best class, ancestry, heritage, background, and level.
+
+Consider synergies: ancestry attribute bonuses, heritage abilities, class key abilities, \
+and background skill training should all support the concept.
+
+Output ONLY valid JSON, no explanation."""
+
+
+_SKELETON_USER_TEMPLATE = """\
+Character concept: {request}
+
+{constraints}
+
+Choose class, ancestry, heritage, background, and level for this concept.
+Consider which ancestry has the best attribute bonuses and abilities for this build.
+
+Available classes: {classes}
+Available ancestries: {ancestries}
+
+Output this JSON structure:
+{{
+  "class": "<class name>",
+  "ancestry": "<ancestry name>",
+  "heritage": "<heritage name>",
+  "background": "<background name>",
+  "level": <integer 1-20>,
+  "reasoning": "<1-2 sentences explaining your choices>"
+}}"""
 
 
 _SYSTEM_PROMPT = """\
@@ -90,6 +123,39 @@ def _append_grouped_skill_feats(parts: list[str], so: SlotOptions):
     for group_name in sorted(groups):
         names = sorted(groups[group_name])
         parts.append(f"    {group_name}: {', '.join(names)}")
+
+
+def build_skeleton_prompts(
+    request: str,
+    class_name: str = "",
+    ancestry_name: str = "",
+    level: int = 0,
+) -> tuple[str, str]:
+    """Build system + user prompts for the skeleton pass.
+
+    Returns (system_prompt, user_prompt).
+    """
+    constraints = []
+    if class_name:
+        constraints.append(f"Class MUST be: {class_name}")
+    if ancestry_name:
+        constraints.append(f"Ancestry MUST be: {ancestry_name}")
+    if level:
+        constraints.append(f"Level MUST be: {level}")
+
+    constraint_str = "\n".join(constraints) if constraints else "No constraints — choose freely."
+
+    classes = ", ".join(list_available_classes())
+    ancestries = ", ".join(list_available_ancestries())
+
+    user_prompt = _SKELETON_USER_TEMPLATE.format(
+        request=request,
+        constraints=constraint_str,
+        classes=classes,
+        ancestries=ancestries,
+    )
+
+    return _SKELETON_SYSTEM_PROMPT, user_prompt
 
 
 def build_system_prompt() -> str:

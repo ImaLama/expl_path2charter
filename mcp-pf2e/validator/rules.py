@@ -145,7 +145,7 @@ def check_slot_counts(
         elif act < exp and untyped == 0:
             errors.append(ValidationError(
                 rule="slot_counts",
-                severity="warning",
+                severity="error",
                 message=f"Missing {slot_type} feats: {act} taken but {exp} slots available at level {build.character_level}.",
                 details={"slot_type": slot_type, "expected": exp, "actual": act},
             ))

@@ -18,7 +18,7 @@ from query.decomposer import get_build_options
 from query.types import BuildOptions
 from validator.engine import BuildValidator
 from validator.repair import format_repair_prompt
-from orchestrator.prompt_builder import build_system_prompt, build_generation_prompt
+from orchestrator.prompt_builder import build_system_prompt, build_generation_prompt, build_skeleton_prompts
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 OLLAMA_OPENAI_URL = f"{OLLAMA_BASE_URL}/v1"
@@ -87,8 +87,8 @@ def _call_ollama(
 
 
 def run_build(
-    class_name: str,
-    character_level: int,
+    class_name: str = "",
+    character_level: int = 0,
     ancestry_name: str = "",
     dedications: list[str] | None = None,
     request: str = "",
@@ -100,9 +100,10 @@ def run_build(
     skip_semantic: bool | None = None,
     verbose: bool = True,
 ) -> dict:
-    """Full build pipeline.
+    """Full build pipeline with optional two-pass mode.
 
-    Returns dict with build_text, build_json, validation, attempts, timings.
+    If class_name and character_level are provided, skips the skeleton pass.
+    Otherwise, Pass 1 asks the LLM to choose class/ancestry/level from the concept.
     """
     model = LOCAL_MODELS.get(provider_key, provider_key)
     json_mode = output_format == "json"
@@ -110,9 +111,10 @@ def run_build(
     if skip_semantic is None:
         skip_semantic = provider_key in LARGE_MODELS
 
-    if not request:
-        ded_str = f" with {', '.join(d.title() for d in dedications)} Dedication" if dedications else ""
-        request = f"Level {character_level} {ancestry_name.title()} {class_name.title()}{ded_str}"
+    if not request and class_name:
+        ded_str = f" with {', '.join(d.title() for d in (dedications or []))} Dedication" if dedications else ""
+        anc_str = f"{ancestry_name.title()} " if ancestry_name else ""
+        request = f"Level {character_level} {anc_str}{class_name.title()}{ded_str}"
 
     timings = {}
     result = {
@@ -127,9 +129,41 @@ def run_build(
         print(f"[pipeline] Unloading models to free VRAM...")
     _unload_all_models()
 
+    # Step 1.5: Skeleton pass if class/level not fully specified
+    if not class_name or not character_level:
+        if verbose:
+            print(f"[pipeline] Pass 1: Generating build skeleton from concept...")
+        skeleton_system, skeleton_user = build_skeleton_prompts(
+            request, class_name=class_name, ancestry_name=ancestry_name, level=character_level,
+        )
+        t0 = time.time()
+        skeleton_raw, skeleton_time = _call_ollama(model, skeleton_user, skeleton_system, 0.7, True)
+        timings["skeleton"] = skeleton_time
+
+        try:
+            skeleton = json.loads(skeleton_raw)
+        except json.JSONDecodeError:
+            skeleton = {}
+
+        if verbose:
+            print(f"[pipeline] Skeleton: {json.dumps(skeleton, indent=2)}")
+
+        if not class_name:
+            class_name = skeleton.get("class", "").lower()
+        if not ancestry_name:
+            ancestry_name = skeleton.get("ancestry", "").lower()
+        if not character_level:
+            character_level = skeleton.get("level", 5)
+        result["skeleton"] = skeleton
+
+        if not class_name:
+            result["error"] = "Could not determine class from concept"
+            return result
+
     # Step 2: Decompose build options
     if verbose:
-        print(f"[pipeline] Decomposing build: {request}")
+        print(f"[pipeline] Decomposing build: {class_name.title()} lvl {character_level}" +
+              (f" ({ancestry_name.title()})" if ancestry_name else ""))
     t0 = time.time()
     options = get_build_options(class_name, character_level, ancestry_name, dedications)
     timings["decompose"] = round(time.time() - t0, 2)

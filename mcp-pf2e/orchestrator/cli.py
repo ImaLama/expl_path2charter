@@ -16,14 +16,19 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
+  # Open-ended concept — LLM picks class, ancestry, level
+  python -m orchestrator.cli --request "a sneaky caster who fights up close"
+
+  # Partially constrained
+  python -m orchestrator.cli --class magus --level 5 --request "sneaky close-range caster"
+
+  # Fully specified
   python -m orchestrator.cli --class thaumaturge --level 4 --ancestry goblin --dedications champion
-  python -m orchestrator.cli --class wizard --level 3 --ancestry elf --model ollama-qwen3-32b
-  python -m orchestrator.cli --class fighter --level 8 --ancestry dwarf --format markdown --output builds/
 """,
     )
 
-    parser.add_argument("--class", dest="class_name", required=True, help="Character class (e.g., thaumaturge, wizard)")
-    parser.add_argument("--level", type=int, required=True, help="Character level (1-20)")
+    parser.add_argument("--class", dest="class_name", default="", help="Character class (e.g., thaumaturge, wizard). Optional — LLM chooses if omitted.")
+    parser.add_argument("--level", type=int, default=0, help="Character level (1-20). Optional — LLM chooses if omitted.")
     parser.add_argument("--ancestry", default="", help="Character ancestry (e.g., goblin, elf)")
     parser.add_argument("--dedications", nargs="*", default=[], help="Archetype dedications (e.g., champion exemplar)")
     parser.add_argument("--model", default="ollama-qwen3-32b", choices=list(LOCAL_MODELS.keys()), help="Ollama model (default: ollama-qwen3-32b)")
@@ -35,6 +40,9 @@ Examples:
     parser.add_argument("--quiet", action="store_true", help="Suppress step-by-step output")
 
     args = parser.parse_args()
+
+    if not args.class_name and not args.request:
+        parser.error("Either --class or --request is required. Use --request for open-ended concepts.")
 
     result = run_build(
         class_name=args.class_name,
