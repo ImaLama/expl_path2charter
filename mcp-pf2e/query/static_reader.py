@@ -242,6 +242,36 @@ def list_skill_feats_for_skills(
     return eligible
 
 
+def group_skill_feats_by_skill(
+    trained_skills: list[str],
+    max_level: int,
+) -> dict[str, list[FeatOption]]:
+    """Group eligible skill feats by their prerequisite skill.
+
+    Returns dict like {"Intimidation": [feat1, feat2], "Athletics": [feat3], "Any": [feat4]}.
+    """
+    eligible = list_skill_feats_for_skills(trained_skills, max_level)
+    groups: dict[str, list[FeatOption]] = {}
+
+    for feat in eligible:
+        if not feat.prerequisites:
+            groups.setdefault("Any", []).append(feat)
+            continue
+
+        prereq_lower = feat.prerequisites.lower()
+        placed = False
+        for skill in _ALL_SKILLS:
+            if skill in prereq_lower:
+                groups.setdefault(skill.title(), []).append(feat)
+                placed = True
+                break
+
+        if not placed:
+            groups.setdefault("Other", []).append(feat)
+
+    return groups
+
+
 def list_available_archetypes() -> list[str]:
     """List all available archetype names."""
     arch_dir = _STATIC_ROOT / "feats" / "archetype"

@@ -2,7 +2,7 @@
 
 import json
 
-from query.types import BuildOptions
+from query.types import BuildOptions, SlotOptions
 
 
 _SYSTEM_PROMPT = """\
@@ -17,6 +17,9 @@ CRITICAL RULES:
 - Ability scores use the standard boost system: 4 free boosts at level 1, plus ancestry/background/class boosts.
 - Ability scores must be RAW SCORES (e.g., 10, 12, 14, 16, 18), NOT modifiers. A boost raises a score by 2 (e.g., 10 → 12). Starting base is 10 for all abilities.
 - For general and skill feat slots, use ONLY real PF2e feat names (e.g., "Intimidating Glare", "Assurance", "Toughness"). Do NOT use skill names or generic terms as feat names.
+
+IMPORTANT: Skill feat slots require FEAT NAMES like "Intimidating Glare" or "Assurance", \
+NOT skill names like "Stealth", "Athletics", or "Deception". Skills and skill feats are different things.
 
 Output your build as valid JSON matching the schema provided in the prompt."""
 
@@ -61,6 +64,34 @@ STR: X, DEX: X, CON: X, INT: X, WIS: X, CHA: X
 <brief build rationale>"""
 
 
+def _append_grouped_skill_feats(parts: list[str], so: SlotOptions):
+    """Append skill feats grouped by prerequisite skill."""
+    groups: dict[str, list[str]] = {}
+    for opt in so.options:
+        if not opt.prerequisites:
+            groups.setdefault("Any (no prerequisite)", []).append(opt.name)
+            continue
+        prereq_lower = opt.prerequisites.lower()
+        placed = False
+        for skill in [
+            "acrobatics", "arcana", "athletics", "crafting", "deception",
+            "diplomacy", "intimidation", "medicine", "nature", "occultism",
+            "performance", "religion", "society", "stealth", "survival", "thievery",
+        ]:
+            if skill in prereq_lower:
+                groups.setdefault(f"{skill.title()} (trained)", []).append(opt.name)
+                placed = True
+                break
+        if not placed:
+            groups.setdefault("Other", []).append(opt.name)
+
+    parts.append(f"  SKILL FEAT slot ({len(so.options)} options, grouped by prerequisite skill):")
+    parts.append(f"  These are FEAT NAMES — do NOT use skill names like 'Stealth' or 'Athletics'.")
+    for group_name in sorted(groups):
+        names = sorted(groups[group_name])
+        parts.append(f"    {group_name}: {', '.join(names)}")
+
+
 def build_system_prompt() -> str:
     return _SYSTEM_PROMPT
 
@@ -92,12 +123,21 @@ def build_generation_prompt(
     for so in options.slot_options:
         slots_by_level.setdefault(so.slot.level, []).append(so)
 
+    # Track which skill feat options we've already printed (shared across levels)
+    skill_feats_printed = False
+
     for level in sorted(slots_by_level):
         parts.append(f"--- Level {level} ---")
         for so in slots_by_level[level]:
             slot_label = so.slot.slot_type.upper()
-            # For large lists, show names only (no prereqs) to save tokens
-            if len(so.options) > 30:
+
+            if so.slot.slot_type == "skill":
+                if not skill_feats_printed:
+                    _append_grouped_skill_feats(parts, so)
+                    skill_feats_printed = True
+                else:
+                    parts.append(f"  {slot_label} FEAT slot: pick from the skill feat list above (level {level} or lower)")
+            elif len(so.options) > 30:
                 parts.append(f"  {slot_label} FEAT slot ({len(so.options)} options):")
                 names = [opt.name for opt in so.options]
                 parts.append(f"    {', '.join(names)}")
