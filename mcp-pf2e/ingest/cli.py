@@ -12,8 +12,9 @@ from .foundry_parser import parse_foundry_packs, PACK_TYPE_MAP
 from .pf2etools_parser import parse_pf2etools_data
 from .loader import load_documents
 
-DEFAULT_DATA_DIR = "/home/shared_llm/static_data/pf2"
-DEFAULT_DB_PATH = "/home/shared_llm/vector_db/pf2e_chroma"
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+DEFAULT_DATA_DIR = str(_PROJECT_ROOT / "_state" / "static_data" / "pf2")
+DEFAULT_DB_PATH = str(_PROJECT_ROOT / "_state" / "vector_db" / "pf2e_chroma")
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
 
 # Existing collections "foundry" and "pf2etools" were created with nomic-embed-text

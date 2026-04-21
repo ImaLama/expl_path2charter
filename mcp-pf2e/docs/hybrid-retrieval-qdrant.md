@@ -73,7 +73,7 @@ FlagEmbedding pulls PyTorch + ~2GB model weights. Significant disk/memory cost.
 ```python
 from qdrant_client import QdrantClient, models
 
-client = QdrantClient(path="/home/shared_llm/vector_db/pf2e_qdrant")
+client = QdrantClient(path="_state/vector_db/pf2e_qdrant")
 
 client.create_collection(
     collection_name="foundry_bgem3_hybrid",

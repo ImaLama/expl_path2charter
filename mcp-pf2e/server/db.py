@@ -11,7 +11,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ingest.embeddings import OllamaEmbeddingFunction
 
-DEFAULT_DB_PATH = "/home/shared_llm/vector_db/pf2e_chroma"
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+DEFAULT_DB_PATH = str(_PROJECT_ROOT / "_state" / "vector_db" / "pf2e_chroma")
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
 
 

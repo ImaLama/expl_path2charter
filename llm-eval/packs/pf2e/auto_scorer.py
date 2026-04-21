@@ -159,7 +159,7 @@ class PF2eAutoScorer(AutoScorer):
 
     def __init__(
         self,
-        db_path: str = "/home/shared_llm/vector_db/pf2e_chroma",
+        db_path: str = str(Path(__file__).resolve().parent.parent.parent.parent / "_state" / "vector_db" / "pf2e_chroma"),
         collection: str = "foundry_mxbai",
     ):
         self.db_path = db_path

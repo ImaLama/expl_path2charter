@@ -14,7 +14,8 @@ llm-eval.tar.gz
 llm-eval/output/
 llm-eval/results/
 
-# Vector DB (generated, not source)
+# Runtime state (vector DB, static data, generated files)
+_state/
 vector_db/
 
 # IDE

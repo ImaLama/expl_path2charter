@@ -21,14 +21,14 @@ search via MCP tools.
 
 - Python 3.12+ with venv
 - [Ollama](https://ollama.ai) running locally
-- PF2e data at `/home/shared_llm/static_data/pf2/` (FoundryVTT + Pf2eTools repos)
+- PF2e data at `../_state/static_data/pf2/` (FoundryVTT + Pf2eTools repos)
 
 ### Setup
 
 ```bash
 # Create and activate venv
-python -m venv /home/explorations/venv
-source /home/explorations/venv/bin/activate
+python -m venv ~/venv
+source ~/venv/bin/activate
 
 # Install dependencies
 pip install mcp chromadb httpx
@@ -42,7 +42,7 @@ ollama pull bge-m3              # optional
 ### Ingest Data
 
 ```bash
-cd /home/explorations/path2charter/mcp-pf2e
+cd /home/labrat/projects/path2charter/mcp-pf2e
 
 # Ingest with mxbai (recommended)
 python -m ingest.cli --source all --embed-model mxbai-embed-large
@@ -66,9 +66,9 @@ Restart Claude Code after first setup to pick up the config:
 {
   "mcpServers": {
     "pf2e-rules": {
-      "command": "/home/explorations/venv/bin/python",
+      "command": "/home/labrat/venv/bin/python",
       "args": ["-m", "server.main"],
-      "cwd": "/home/explorations/path2charter/mcp-pf2e"
+      "cwd": "/home/labrat/projects/path2charter/mcp-pf2e"
     }
   }
 }

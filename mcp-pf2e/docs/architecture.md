@@ -106,7 +106,7 @@ mcp-pf2e/
 
 ## Data Sources
 
-### Source 1: FoundryVTT (`/home/shared_llm/static_data/pf2/pf2e/`)
+### Source 1: FoundryVTT (`_state/static_data/pf2/pf2e/`)
 
 The official Pathfinder 2e system for Foundry Virtual Tabletop.
 
@@ -167,7 +167,7 @@ pf2e/packs/pf2e/
 }
 ```
 
-### Source 2: Pf2eTools (`/home/shared_llm/static_data/pf2/Pf2eTools/`)
+### Source 2: Pf2eTools (`_state/static_data/pf2/Pf2eTools/`)
 
 Data powering the pf2etools.com community reference site.
 
@@ -235,7 +235,7 @@ description (cleaned), and rules keys — optimized for semantic search.
 ## ChromaDB Storage
 
 ```
-/home/shared_llm/vector_db/pf2e_chroma/
+_state/vector_db/pf2e_chroma/
 └── (ChromaDB internal files)
 
 Collections:
