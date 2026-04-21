@@ -272,6 +272,80 @@ def group_skill_feats_by_skill(
     return groups
 
 
+def list_heritages(ancestry_name: str) -> list[str]:
+    """List all heritage names for an ancestry."""
+    heritage_dir = _STATIC_ROOT / "heritages" / _slugify(ancestry_name)
+    if not heritage_dir.exists():
+        return []
+    names = []
+    for f in heritage_dir.glob("*.json"):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+            if "name" in data:
+                names.append(data["name"])
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            continue
+    return sorted(names)
+
+
+def list_backgrounds() -> list[str]:
+    """List all available background names."""
+    bg_dir = _STATIC_ROOT / "backgrounds"
+    if not bg_dir.exists():
+        return []
+    names = []
+    for f in bg_dir.rglob("*.json"):
+        if f.name == "_folders.json":
+            continue
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and "name" in data:
+                names.append(data["name"])
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            continue
+    return sorted(names)
+
+
+def _fuzzy_match(name: str, candidates: list[str]) -> str | None:
+    """Find the best fuzzy match for a name in a list of candidates."""
+    name_lower = name.lower().strip()
+    for c in candidates:
+        if c.lower() == name_lower:
+            return c
+    for c in candidates:
+        if name_lower in c.lower() or c.lower() in name_lower:
+            return c
+    return None
+
+
+def get_ancestry_data(ancestry_name: str) -> dict | None:
+    """Load ancestry JSON and return its full data."""
+    filepath = _STATIC_ROOT / "ancestries" / f"{_slugify(ancestry_name)}.json"
+    if not filepath.exists():
+        return None
+    try:
+        return json.loads(filepath.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return None
+
+
+def get_background_data(background_name: str) -> dict | None:
+    """Load a background JSON by name (fuzzy match against available backgrounds)."""
+    bg_dir = _STATIC_ROOT / "backgrounds"
+    if not bg_dir.exists():
+        return None
+    for f in bg_dir.rglob("*.json"):
+        if f.name == "_folders.json":
+            continue
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and data.get("name", "").lower() == background_name.lower():
+                return data
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            continue
+    return None
+
+
 def list_available_archetypes() -> list[str]:
     """List all available archetype names."""
     arch_dir = _STATIC_ROOT / "feats" / "archetype"

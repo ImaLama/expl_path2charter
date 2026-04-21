@@ -15,6 +15,9 @@ from .rules import (
     check_slot_counts,
     check_feat_slot_type,
     check_class_feat_access,
+    check_ancestry_feat_access,
+    check_heritage,
+    check_background,
     check_prerequisites,
     check_archetype_rules,
 )
@@ -40,6 +43,9 @@ class BuildValidator:
         all_errors.extend(check_slot_counts(build))
         all_errors.extend(check_feat_slot_type(build, self._db))
         all_errors.extend(check_class_feat_access(build, self._db))
+        all_errors.extend(check_ancestry_feat_access(build, self._db))
+        all_errors.extend(check_heritage(build))
+        all_errors.extend(check_background(build))
         all_errors.extend(check_prerequisites(build, self._db))
         all_errors.extend(check_archetype_rules(build, self._db))
 

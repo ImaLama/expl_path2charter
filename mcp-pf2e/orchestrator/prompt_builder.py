@@ -3,7 +3,7 @@
 import json
 
 from query.types import BuildOptions, SlotOptions
-from query.static_reader import list_available_classes, list_available_ancestries
+from query.static_reader import list_available_classes, list_available_ancestries, list_heritages, list_backgrounds
 
 
 _SKELETON_SYSTEM_PROMPT = """\
@@ -26,13 +26,15 @@ Consider which ancestry has the best attribute bonuses and abilities for this bu
 
 Available classes: {classes}
 Available ancestries: {ancestries}
+{heritage_section}
+IMPORTANT: Heritage and background MUST be real PF2e names from official content. Do NOT invent them.
 
 Output this JSON structure:
 {{
   "class": "<class name>",
   "ancestry": "<ancestry name>",
-  "heritage": "<heritage name>",
-  "background": "<background name>",
+  "heritage": "<real heritage name from the list above>",
+  "background": "<real background name>",
   "level": <integer 1-20>,
   "reasoning": "<1-2 sentences explaining your choices>"
 }}"""
@@ -148,11 +150,21 @@ def build_skeleton_prompts(
     classes = ", ".join(list_available_classes())
     ancestries = ", ".join(list_available_ancestries())
 
+    # If ancestry is known, list available heritages
+    heritage_section = ""
+    if ancestry_name:
+        heritages = list_heritages(ancestry_name)
+        if heritages:
+            heritage_section = f"Available {ancestry_name.title()} heritages: {', '.join(heritages)}"
+    if not heritage_section:
+        heritage_section = "Heritage: pick a real heritage that matches the chosen ancestry."
+
     user_prompt = _SKELETON_USER_TEMPLATE.format(
         request=request,
         constraints=constraint_str,
         classes=classes,
         ancestries=ancestries,
+        heritage_section=heritage_section,
     )
 
     return _SKELETON_SYSTEM_PROMPT, user_prompt

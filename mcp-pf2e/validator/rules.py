@@ -9,7 +9,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from .types import ParsedBuild, ValidationError
 from .prerequisite import parse_prerequisites, check_prerequisite
-from query.static_reader import get_class_data, get_feat_slot_levels
+from query.static_reader import (
+    get_class_data, get_feat_slot_levels,
+    list_heritages, list_backgrounds, _fuzzy_match,
+)
 
 # Optional: PF2eDB for database-backed feat verification
 try:
@@ -317,6 +320,91 @@ def check_archetype_rules(
             severity="error",
             message=f"Second dedication ({dedications[1]}) requires at least 2 non-dedication archetype feats from the first ({dedications[0]}).",
             details={"dedications": dedications, "archetype_feats": archetype_feats},
+        ))
+
+    return errors
+
+
+def check_ancestry_feat_access(
+    build: ParsedBuild,
+    db: "PF2eDB | None" = None,
+) -> list[ValidationError]:
+    """Ancestry feats must belong to the character's ancestry."""
+    errors = []
+
+    if db is None or not build.ancestry_name:
+        return errors
+
+    ancestry_slug = build.ancestry_name.lower()
+
+    for feat in build.feats:
+        if feat.slot_type != "ancestry":
+            continue
+
+        entry = db.get_entry(feat.name, content_type=None)
+        if not entry:
+            continue
+
+        traits = entry.get("system", {}).get("traits", {}).get("value", [])
+        traits_lower = [t.lower() for t in traits]
+
+        if ancestry_slug not in traits_lower:
+            errors.append(ValidationError(
+                rule="ancestry_feat_access",
+                severity="error",
+                message=f'"{feat.name}" is not a {build.ancestry_name} ancestry feat (traits: {traits}).',
+                feat_name=feat.name,
+                details={"traits": traits, "ancestry": build.ancestry_name},
+            ))
+
+    return errors
+
+
+def check_heritage(build: ParsedBuild) -> list[ValidationError]:
+    """Verify heritage exists and belongs to the chosen ancestry."""
+    errors = []
+
+    if not build.heritage or not build.ancestry_name:
+        return errors
+
+    available = list_heritages(build.ancestry_name)
+    if not available:
+        return errors
+
+    match = _fuzzy_match(build.heritage, available)
+    if not match:
+        suggestions = [h for h in available if build.ancestry_name.lower() in h.lower()][:3]
+        if not suggestions:
+            suggestions = available[:5]
+        errors.append(ValidationError(
+            rule="heritage",
+            severity="error",
+            message=f'"{build.heritage}" is not a valid {build.ancestry_name} heritage. Options include: {", ".join(suggestions)}.',
+            feat_name=build.heritage,
+            details={"available": available},
+        ))
+
+    return errors
+
+
+def check_background(build: ParsedBuild) -> list[ValidationError]:
+    """Verify background exists."""
+    errors = []
+
+    if not build.background:
+        return errors
+
+    available = list_backgrounds()
+    if not available:
+        return errors
+
+    match = _fuzzy_match(build.background, available)
+    if not match:
+        errors.append(ValidationError(
+            rule="background",
+            severity="error",
+            message=f'"{build.background}" is not a known PF2e background.',
+            feat_name=build.background,
         ))
 
     return errors
