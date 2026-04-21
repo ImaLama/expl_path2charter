@@ -18,6 +18,9 @@ llm-eval/results/
 _state/
 vector_db/
 
+# Generated build outputs
+mcp-pf2e/builds/
+
 # IDE
 .vscode/
 .idea/
