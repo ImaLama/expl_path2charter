@@ -161,15 +161,21 @@ def run_build(
             return result
 
     # Step 1.6: Pre-validate skeleton before expensive generation
-    from query.static_reader import list_available_classes, list_available_ancestries, list_heritages
+    from query.static_reader import list_available_classes, list_available_ancestries
     available_classes = list_available_classes()
     if class_name and class_name not in available_classes:
+        msg = f"Class '{class_name}' not found in data. Available: {', '.join(available_classes[:10])}"
         if verbose:
-            print(f"[pipeline] WARNING: class '{class_name}' not found in data. Available: {', '.join(available_classes[:10])}")
+            print(f"[pipeline] ERROR: {msg}")
+        result["error"] = msg
+        return result
     available_ancestries = list_available_ancestries()
     if ancestry_name and ancestry_name not in available_ancestries:
+        msg = f"Ancestry '{ancestry_name}' not found in data. Available: {', '.join(available_ancestries[:10])}"
         if verbose:
-            print(f"[pipeline] WARNING: ancestry '{ancestry_name}' not found in data. Available: {', '.join(available_ancestries[:10])}")
+            print(f"[pipeline] ERROR: {msg}")
+        result["error"] = msg
+        return result
 
     # Step 2: Decompose build options
     if verbose:

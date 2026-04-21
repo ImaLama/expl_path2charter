@@ -351,7 +351,7 @@ def get_background_data(background_name: str) -> dict | None:
     return None
 
 
-@lru_cache(maxsize=64)
+@lru_cache(maxsize=None)
 def get_class_features(class_name: str, max_level: int = 20) -> list[str]:
     """Get auto-granted class feature names up to a given level."""
     data = get_class_data(class_name)
