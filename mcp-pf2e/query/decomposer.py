@@ -3,11 +3,14 @@
 from .types import BuildSpec, BuildOptions, FeatSlot, SlotOptions
 from .static_reader import (
     get_feat_slot_levels,
+    get_class_trained_skills,
     list_class_feats,
     list_ancestry_feats,
     list_general_feats,
     list_skill_feats,
+    list_skill_feats_for_skills,
     list_archetype_feats,
+    _ALL_SKILLS,
 )
 
 
@@ -23,6 +26,17 @@ def decompose_build(spec: BuildSpec) -> BuildOptions:
     """
     slot_levels = get_feat_slot_levels(spec.class_name)
     slot_options = []
+
+    # Determine trained skills for skill feat filtering
+    skill_info = get_class_trained_skills(spec.class_name)
+    # Fixed class skills + assume reasonable picks for additional slots
+    trained_skills = list(skill_info["fixed"])
+    if skill_info["custom"]:
+        trained_skills.append(skill_info["custom"].lower())
+    # For additional skill picks, include all skills as possibilities
+    # (we can't know what the player chose, so be inclusive)
+    if skill_info["additional"] > 0:
+        trained_skills = list(_ALL_SKILLS)
 
     # Pre-fetch archetype feats if dedications are specified
     archetype_feats_by_max_level: dict[int, list] = {}
@@ -72,12 +86,12 @@ def decompose_build(spec: BuildSpec) -> BuildOptions:
         options = list_general_feats(lvl)
         slot_options.append(SlotOptions(slot=slot, options=sorted(options, key=lambda f: (f.level, f.name))))
 
-    # Skill feat slots
+    # Skill feat slots — filtered by trained skills
     for lvl in slot_levels["skill"]:
         if lvl > spec.character_level:
             break
         slot = FeatSlot(slot_type="skill", level=lvl, source="")
-        options = list_skill_feats(lvl)
+        options = list_skill_feats_for_skills(trained_skills, lvl)
         slot_options.append(SlotOptions(slot=slot, options=sorted(options, key=lambda f: (f.level, f.name))))
 
     return BuildOptions(spec=spec, slot_options=slot_options)

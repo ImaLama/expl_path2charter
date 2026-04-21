@@ -198,9 +198,10 @@ def run_build(
     if verbose:
         print(f"[pipeline] Validation: {validation.error_count} errors, {len(validation.warnings)} warnings")
 
-    # Step 6: Repair loop
+    # Step 6: Repair loop with cumulative history
     attempts = 1
     current_output = raw_output
+    repair_history = []
 
     for i in range(max_repairs):
         if validation.is_valid:
@@ -211,7 +212,16 @@ def run_build(
             for e in validation.errors:
                 print(f"  ERROR: {e.message}")
 
-        repair_prompt = format_repair_prompt(validation, request)
+        # Record this attempt's errors in history
+        repair_history.append({
+            "attempt": attempts,
+            "errors": [
+                {"rule": e.rule, "message": e.message, "feat_name": e.feat_name}
+                for e in validation.errors
+            ],
+        })
+
+        repair_prompt = format_repair_prompt(validation, request, history=repair_history)
         repair_input = f"{current_output}\n\n---\n\n{repair_prompt}"
 
         t0 = time.time()

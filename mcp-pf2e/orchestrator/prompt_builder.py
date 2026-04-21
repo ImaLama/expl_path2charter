@@ -83,14 +83,9 @@ def build_generation_prompt(
     parts.append(f"Build request: {request}")
     parts.append("")
 
-    # Feat options per slot — only list class-specific feats to save tokens
-    # General and skill feats are too numerous to list (100+)
-    DETAILED_SLOT_TYPES = {"class", "ancestry"}
-    SUMMARY_SLOT_TYPES = {"general", "skill"}
-
+    # Feat options per slot — all types now listed (skill feats pre-filtered by prereqs)
     parts.append("=== AVAILABLE FEAT OPTIONS ===")
-    parts.append("Choose feats from these lists. For class and ancestry feats, you MUST pick from the options below.")
-    parts.append("For general and skill feats, choose any valid PF2e feat of the appropriate type and level.")
+    parts.append("You MUST choose feats ONLY from these lists. Do NOT use any feat not listed here.")
     parts.append("")
 
     slots_by_level: dict[int, list] = {}
@@ -101,7 +96,12 @@ def build_generation_prompt(
         parts.append(f"--- Level {level} ---")
         for so in slots_by_level[level]:
             slot_label = so.slot.slot_type.upper()
-            if so.slot.slot_type in DETAILED_SLOT_TYPES:
+            # For large lists, show names only (no prereqs) to save tokens
+            if len(so.options) > 30:
+                parts.append(f"  {slot_label} FEAT slot ({len(so.options)} options):")
+                names = [opt.name for opt in so.options]
+                parts.append(f"    {', '.join(names)}")
+            else:
                 parts.append(f"  {slot_label} FEAT slot ({len(so.options)} options):")
                 for opt in so.options:
                     line = f"    - {opt.name} (lvl {opt.level})"
@@ -110,8 +110,6 @@ def build_generation_prompt(
                     if opt.rarity != "common":
                         line += f" [{opt.rarity}]"
                     parts.append(line)
-            else:
-                parts.append(f"  {slot_label} FEAT slot: choose any {so.slot.slot_type} feat of level {level} or lower")
         parts.append("")
 
     # Output format template

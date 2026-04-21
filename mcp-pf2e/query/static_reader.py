@@ -172,6 +172,76 @@ def list_available_ancestries() -> list[str]:
     return sorted(d.name for d in ancestry_dir.iterdir() if d.is_dir())
 
 
+def get_class_trained_skills(class_name: str) -> dict:
+    """Get class skill training info.
+
+    Returns dict with:
+      'fixed': list of always-trained skills
+      'additional': number of extra skill choices
+      'custom': any custom lore skill
+    """
+    data = get_class_data(class_name)
+    if not data:
+        return {"fixed": [], "additional": 0, "custom": ""}
+    ts = data.get("system", {}).get("trainedSkills", {})
+    return {
+        "fixed": ts.get("value", []),
+        "additional": ts.get("additional", 0),
+        "custom": ts.get("custom", ""),
+    }
+
+
+_ALL_SKILLS = [
+    "acrobatics", "arcana", "athletics", "crafting", "deception",
+    "diplomacy", "intimidation", "medicine", "nature", "occultism",
+    "performance", "religion", "society", "stealth", "survival", "thievery",
+]
+
+
+def list_skill_feats_for_skills(
+    trained_skills: list[str],
+    max_level: int,
+) -> list[FeatOption]:
+    """List skill feats whose prerequisites are met by the given trained skills.
+
+    A skill feat is eligible if:
+    - It has no prerequisites, OR
+    - Its 'trained in X' prereq matches one of the trained skills
+    """
+    all_feats = list_skill_feats(max_level)
+    trained_lower = {s.lower() for s in trained_skills}
+
+    eligible = []
+    for feat in all_feats:
+        if not feat.prerequisites:
+            eligible.append(feat)
+            continue
+
+        prereq_lower = feat.prerequisites.lower()
+        if "trained in" not in prereq_lower:
+            eligible.append(feat)
+            continue
+
+        # Check if any trained skill matches the prerequisite
+        matched = False
+        for skill in trained_lower:
+            if skill in prereq_lower:
+                matched = True
+                break
+
+        # Handle "Arcana, Nature, Occultism, or Religion" style prereqs
+        if not matched and ("," in prereq_lower or " or " in prereq_lower):
+            for skill in trained_lower:
+                if skill in prereq_lower:
+                    matched = True
+                    break
+
+        if matched:
+            eligible.append(feat)
+
+    return eligible
+
+
 def list_available_archetypes() -> list[str]:
     """List all available archetype names."""
     arch_dir = _STATIC_ROOT / "feats" / "archetype"

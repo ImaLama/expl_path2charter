@@ -3,11 +3,18 @@
 from .types import ValidationResult
 
 
-def format_repair_prompt(result: ValidationResult, original_prompt: str = "") -> str:
-    """Format validation errors into a repair prompt for the LLM.
+def format_repair_prompt(
+    result: ValidationResult,
+    original_prompt: str = "",
+    history: list[dict] | None = None,
+) -> str:
+    """Format validation errors into a repair prompt with cumulative history.
 
-    The repair prompt tells the model exactly what's wrong and asks it to
-    fix only those issues, keeping everything else the same.
+    Args:
+        result: Current validation result
+        original_prompt: The original build request
+        history: List of previous attempts, each with:
+            {"attempt": N, "errors": [{"rule": ..., "message": ..., "feat_name": ...}]}
     """
     if result.is_valid:
         return ""
@@ -18,7 +25,23 @@ def format_repair_prompt(result: ValidationResult, original_prompt: str = "") ->
         lines.append(f"Original request: {original_prompt}")
         lines.append("")
 
-    lines.append(f"Your build had {result.error_count} error(s):")
+    # Cumulative history — show what was already tried and failed
+    if history:
+        failed_names = set()
+        lines.append("=== PREVIOUS FAILED ATTEMPTS ===")
+        for h in history:
+            lines.append(f"Attempt {h['attempt']}:")
+            for err in h["errors"]:
+                lines.append(f"  - {err['message']}")
+                if err.get("feat_name"):
+                    failed_names.add(err["feat_name"])
+        lines.append("")
+
+        if failed_names:
+            lines.append(f"Do NOT use any of these (all invalid): {', '.join(sorted(failed_names))}")
+            lines.append("")
+
+    lines.append(f"Your build STILL has {result.error_count} error(s):" if history else f"Your build had {result.error_count} error(s):")
     lines.append("")
 
     for i, error in enumerate(result.errors, 1):
@@ -36,6 +59,6 @@ def format_repair_prompt(result: ValidationResult, original_prompt: str = "") ->
 
     lines.append("")
     lines.append("Fix ONLY the errors listed above. Keep all other choices the same.")
-    lines.append("Output the complete corrected build.")
+    lines.append("Output the complete corrected build as valid JSON.")
 
     return "\n".join(lines)
