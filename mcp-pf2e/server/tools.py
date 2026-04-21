@@ -1,11 +1,16 @@
 """MCP tool definitions for PF2e rules search."""
 
 import json
+import sys
+from pathlib import Path
 
 from mcp.server import Server
 from mcp.types import Tool, TextContent
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from .db import PF2eDB
+from query.decomposer import get_build_options
 
 
 def register_tools(app: Server, db: PF2eDB):
@@ -117,6 +122,38 @@ def register_tools(app: Server, db: PF2eDB):
                     },
                 },
             ),
+            Tool(
+                name="get_build_options",
+                description=(
+                    "Get ALL valid feat options for a character build, organized by feat slot. "
+                    "Returns exhaustive lists of class feats, ancestry feats, general feats, "
+                    "skill feats, and archetype feats for each slot at each level. "
+                    "Use this instead of search when you need complete option lists for building a character."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "class_name": {
+                            "type": "string",
+                            "description": "Character class (e.g., 'thaumaturge', 'fighter', 'wizard')",
+                        },
+                        "character_level": {
+                            "type": "integer",
+                            "description": "Character level (1-20)",
+                        },
+                        "ancestry_name": {
+                            "type": "string",
+                            "description": "Character ancestry (e.g., 'goblin', 'elf', 'dwarf')",
+                        },
+                        "dedications": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Archetype dedications (e.g., ['champion', 'exemplar'])",
+                        },
+                    },
+                    "required": ["class_name", "character_level"],
+                },
+            ),
         ]
 
     @app.call_tool()
@@ -154,6 +191,37 @@ def register_tools(app: Server, db: PF2eDB):
                     "content_types": types,
                     "collections": collections,
                 }
+                return [TextContent(type="text", text=json.dumps(result, indent=2))]
+            except Exception as e:
+                return [TextContent(type="text", text=f"Error: {e}")]
+
+        elif name == "get_build_options":
+            try:
+                options = get_build_options(
+                    class_name=arguments["class_name"],
+                    character_level=arguments["character_level"],
+                    ancestry_name=arguments.get("ancestry_name", ""),
+                    dedications=arguments.get("dedications"),
+                )
+                result = []
+                for so in options.slot_options:
+                    slot_data = {
+                        "slot_type": so.slot.slot_type,
+                        "slot_level": so.slot.level,
+                        "source": so.slot.source,
+                        "option_count": len(so.options),
+                        "options": [
+                            {
+                                "name": o.name,
+                                "level": o.level,
+                                "traits": o.traits,
+                                "prerequisites": o.prerequisites,
+                                "rarity": o.rarity,
+                            }
+                            for o in so.options
+                        ],
+                    }
+                    result.append(slot_data)
                 return [TextContent(type="text", text=json.dumps(result, indent=2))]
             except Exception as e:
                 return [TextContent(type="text", text=f"Error: {e}")]
