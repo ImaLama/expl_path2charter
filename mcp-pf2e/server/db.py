@@ -90,7 +90,7 @@ class PF2eDB:
             return []
 
         query_embedding = self._embed_query(query, collection_name)
-        if query_embedding:
+        if query_embedding is not None:
             results = collection.query(
                 query_embeddings=[query_embedding],
                 n_results=fetch_n,
