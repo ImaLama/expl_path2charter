@@ -82,9 +82,15 @@ Examples:
     if args.output:
         out_dir = Path(args.output)
         out_dir.mkdir(parents=True, exist_ok=True)
-        filename = f"{args.class_name}_lvl{args.level}"
-        if args.ancestry:
-            filename = f"{args.ancestry}_{filename}"
+        # Use actual class/level from result (may come from skeleton pass)
+        build_json = result.get("build_json", {}) or {}
+        skeleton = result.get("skeleton", {}) or {}
+        r_class = args.class_name or skeleton.get("class", build_json.get("class", "build"))
+        r_level = args.level or skeleton.get("level", build_json.get("level", 0))
+        r_ancestry = args.ancestry or skeleton.get("ancestry", build_json.get("ancestry", ""))
+        filename = f"{r_class}_lvl{r_level}"
+        if r_ancestry:
+            filename = f"{r_ancestry}_{filename}"
 
         out_path = out_dir / f"{filename}.json"
         with open(out_path, "w") as f:
