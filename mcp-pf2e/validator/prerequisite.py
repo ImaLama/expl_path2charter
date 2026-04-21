@@ -120,9 +120,19 @@ def check_prerequisite(prereq: Prerequisite, build: ParsedBuild) -> tuple[bool, 
             return False, f"requires {prereq.raw} but has {ability.upper()} {actual}"
 
     if prereq.type == "proficiency":
-        # Can't fully verify proficiencies without tracking the full build state
-        # Return True with no warning — this would need the class progression data
-        return True, ""
+        if not build.skills:
+            return True, ""  # Can't verify without skills data
+        # Parse "trained:Acrobatics" → rank, skill
+        parts = prereq.value.split(":", 1)
+        if len(parts) == 2:
+            required_rank, skill_name = parts[0].lower(), parts[1].strip().lower()
+            actual_rank = build.skills.get(skill_name, "untrained").lower()
+            rank_order = {"untrained": 0, "trained": 1, "expert": 2, "master": 3, "legendary": 4}
+            if rank_order.get(actual_rank, 0) >= rank_order.get(required_rank, 0):
+                return True, ""
+            if actual_rank == "untrained":
+                return False, f'requires {prereq.raw} but character is untrained in {skill_name.title()}'
+            return False, f'requires {prereq.raw} but character is only {actual_rank} in {skill_name.title()}'
 
     # "other" type — can't verify deterministically
     return True, ""

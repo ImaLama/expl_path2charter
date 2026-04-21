@@ -20,6 +20,7 @@ class ParsedBuild:
     background: str = ""
     character_level: int = 0
     ability_scores: dict[str, int] = field(default_factory=dict)
+    skills: dict[str, str] = field(default_factory=dict)  # skill_name → rank (trained/expert/master/legendary)
     feats: list[ParsedFeatChoice] = field(default_factory=list)
     spells: list[str] = field(default_factory=list)
     equipment: list[str] = field(default_factory=list)

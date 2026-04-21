@@ -18,6 +18,9 @@ from .rules import (
     check_ancestry_feat_access,
     check_heritage,
     check_background,
+    check_skill_ranks,
+    check_skill_counts,
+    check_ability_scores,
     check_prerequisites,
     check_archetype_rules,
 )
@@ -46,6 +49,9 @@ class BuildValidator:
         all_errors.extend(check_ancestry_feat_access(build, self._db))
         all_errors.extend(check_heritage(build))
         all_errors.extend(check_background(build))
+        all_errors.extend(check_skill_ranks(build))
+        all_errors.extend(check_skill_counts(build))
+        all_errors.extend(check_ability_scores(build))
         all_errors.extend(check_prerequisites(build, self._db))
         all_errors.extend(check_archetype_rules(build, self._db))
 
@@ -97,6 +103,7 @@ class BuildValidator:
             background=data.get("background", ""),
             character_level=data.get("level", expected_level),
             ability_scores=data.get("ability_scores", {}),
+            skills=data.get("skills", {}),
             equipment=data.get("equipment", []),
             raw_text="",
         )

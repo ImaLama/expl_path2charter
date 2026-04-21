@@ -51,6 +51,7 @@ CRITICAL RULES:
 - Feat prerequisites must be satisfied (a feat requiring another feat means that feat was taken at an earlier level).
 - Ability scores use the standard boost system: 4 free boosts at level 1, plus ancestry/background/class boosts.
 - Ability scores must be RAW SCORES (e.g., 10, 12, 14, 16, 18), NOT modifiers. A boost raises a score by 2 (e.g., 10 → 12). Starting base is 10 for all abilities.
+- In the "skills" field, list ALL skills the character is trained or better in, with rank: "trained", "expert", "master", or "legendary". Skills come from: class training, background, and skill increases at odd levels (3, 5, 7, ...). Expert requires level 3+, master requires level 7+, legendary requires level 15+.
 - For general and skill feat slots, use ONLY real PF2e feat names (e.g., "Intimidating Glare", "Assurance", "Toughness"). Do NOT use skill names or generic terms as feat names.
 
 IMPORTANT: Skill feat slots require FEAT NAMES like "Intimidating Glare" or "Assurance", \
@@ -69,6 +70,7 @@ Output ONLY valid JSON with this exact structure (no markdown, no explanation ou
   "background": "<choose a background>",
   "level": {level},
   "ability_scores": {{"str": 10, "dex": 14, "con": 12, "int": 10, "wis": 12, "cha": 18}},
+  "skills": {{"athletics": "trained", "intimidation": "trained", "occultism": "trained"}},
   "levels": {{
 {level_slots}
   }},

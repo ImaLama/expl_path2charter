@@ -11,6 +11,7 @@ from .types import ParsedBuild, ValidationError
 from .prerequisite import parse_prerequisites, check_prerequisite
 from query.static_reader import (
     get_class_data, get_feat_slot_levels,
+    get_class_trained_skills, get_background_data, get_ancestry_data,
     list_heritages, list_backgrounds, _fuzzy_match,
 )
 
@@ -406,5 +407,153 @@ def check_background(build: ParsedBuild) -> list[ValidationError]:
             message=f'"{build.background}" is not a known PF2e background.',
             feat_name=build.background,
         ))
+
+    return errors
+
+
+_RANK_ORDER = {"untrained": 0, "trained": 1, "expert": 2, "master": 3, "legendary": 4}
+_RANK_MIN_LEVEL = {"trained": 1, "expert": 3, "master": 7, "legendary": 15}
+
+
+def check_skill_ranks(build: ParsedBuild) -> list[ValidationError]:
+    """Verify skill ranks don't exceed what's achievable at the character's level."""
+    errors = []
+
+    if not build.skills or build.character_level == 0:
+        return errors
+
+    for skill, rank in build.skills.items():
+        rank_lower = rank.lower()
+        min_level = _RANK_MIN_LEVEL.get(rank_lower, 0)
+        if min_level > build.character_level:
+            errors.append(ValidationError(
+                rule="skill_ranks",
+                severity="error",
+                message=f'"{skill}" at {rank} requires level {min_level}+, but character is level {build.character_level}.',
+                details={"skill": skill, "rank": rank, "min_level": min_level},
+            ))
+
+    return errors
+
+
+def check_skill_counts(build: ParsedBuild) -> list[ValidationError]:
+    """Verify the total number of trained skills is plausible."""
+    errors = []
+
+    if not build.skills or not build.class_name or build.character_level == 0:
+        return errors
+
+    # Count trained-or-better skills
+    trained_count = sum(1 for rank in build.skills.values() if _RANK_ORDER.get(rank.lower(), 0) >= 1)
+
+    # Calculate expected sources of skill training
+    skill_info = get_class_trained_skills(build.class_name)
+    class_fixed = len(skill_info.get("fixed", []))
+    class_additional = skill_info.get("additional", 0)
+    class_custom = 1 if skill_info.get("custom") else 0
+
+    # Background grants 1-2 skills
+    bg_skills = 0
+    if build.background:
+        bg_data = get_background_data(build.background)
+        if bg_data:
+            bg_ts = bg_data.get("system", {}).get("trainedSkills", {})
+            bg_skills = len(bg_ts.get("value", [])) + len(bg_ts.get("lore", []))
+
+    # Int modifier grants additional skills at level 1
+    int_score = build.ability_scores.get("int", 10)
+    int_modifier = max(0, (int_score - 10) // 2)
+
+    base_trained = class_fixed + class_additional + class_custom + bg_skills + int_modifier
+
+    # Skill increases at higher levels (from class data)
+    class_data = get_class_data(build.class_name)
+    increase_levels = []
+    if class_data:
+        increase_levels = class_data.get("system", {}).get("skillIncreaseLevels", {}).get("value", [])
+    increases = sum(1 for lvl in increase_levels if lvl <= build.character_level)
+
+    max_possible = base_trained + increases
+
+    if trained_count > max_possible + 2:
+        errors.append(ValidationError(
+            rule="skill_counts",
+            severity="warning",
+            message=f"Character has {trained_count} trained skills but at most ~{max_possible} are expected at level {build.character_level}.",
+            details={"trained": trained_count, "max_expected": max_possible},
+        ))
+
+    return errors
+
+
+def check_ability_scores(build: ParsedBuild) -> list[ValidationError]:
+    """Bounds-check ability scores — catch common LLM errors without exact verification.
+
+    Checks: odd scores, scores above maximum achievable, key ability too low,
+    scores below 8 without explanation. Does NOT try to verify exact boost choices.
+    """
+    errors = []
+
+    if not build.ability_scores or build.character_level == 0:
+        return errors
+
+    # Calculate maximum achievable at this level
+    # Level 1: base 10 + up to ~7 boosts possible (2 ancestry + 1 background + 1 class + 4 free - 1 flaw)
+    # Each boost below 18 adds +2, above 18 adds +1
+    # Level 5/10/15/20 each add 4 more boosts
+    level_boost_rounds = sum(1 for lvl in [5, 10, 15, 20] if lvl <= build.character_level)
+    # Theoretical max: 18 at level 1 + level_boost_rounds * 1 (above 18, boosts add +1)
+    # Realistic max at level 1: 18 (very focused), level 5: 19, level 10: 20, level 20: 22+
+    max_at_level = 18 + level_boost_rounds
+
+    # Get key ability for the class
+    key_abilities = []
+    class_data = get_class_data(build.class_name)
+    if class_data:
+        key_abilities = class_data.get("system", {}).get("keyAbility", {}).get("value", [])
+
+    for ability, score in build.ability_scores.items():
+        if not isinstance(score, int):
+            continue
+
+        # Odd scores are impossible (base 10 + even boosts)
+        if score % 2 != 0:
+            errors.append(ValidationError(
+                rule="ability_scores",
+                severity="error",
+                message=f"{ability.upper()} {score} is odd — PF2e ability scores are always even (base 10 + boosts of 2).",
+                details={"ability": ability, "score": score},
+            ))
+
+        # Score above maximum achievable
+        if score > max_at_level:
+            errors.append(ValidationError(
+                rule="ability_scores",
+                severity="error",
+                message=f"{ability.upper()} {score} exceeds maximum achievable ({max_at_level}) at level {build.character_level}.",
+                details={"ability": ability, "score": score, "max": max_at_level},
+            ))
+
+        # Score below 8 without ancestry flaw (warning, not error — voluntary flaws exist)
+        if score < 8:
+            errors.append(ValidationError(
+                rule="ability_scores",
+                severity="warning",
+                message=f"{ability.upper()} {score} is unusually low — verify voluntary flaw or ancestry flaw applies.",
+                details={"ability": ability, "score": score},
+            ))
+
+    # Key ability should be at least 16 at level 1 (class boost + at least one other boost)
+    if key_abilities and build.character_level >= 1:
+        for ka in key_abilities:
+            ka_score = build.ability_scores.get(ka, 0)
+            if ka_score and ka_score < 14:
+                errors.append(ValidationError(
+                    rule="ability_scores",
+                    severity="warning",
+                    message=f"Key ability {ka.upper()} is {ka_score} — typically at least 16 at level 1 (class boost + other boosts).",
+                    details={"ability": ka, "score": ka_score, "key_ability": True},
+                ))
+                break  # Only warn once (class may have multiple key ability options)
 
     return errors
