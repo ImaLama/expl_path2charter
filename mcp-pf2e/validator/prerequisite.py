@@ -1,9 +1,14 @@
 """Parse and check PF2e prerequisite strings."""
 
 import re
+import sys
 from dataclasses import dataclass
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from .types import ParsedBuild
+from query.static_reader import get_class_features
 
 
 @dataclass
@@ -96,11 +101,13 @@ def check_prerequisite(prereq: Prerequisite, build: ParsedBuild) -> tuple[bool, 
     Returns (satisfied, reason).
     """
     if prereq.type == "feat" or prereq.type == "dedication":
-        # Check if the feat was taken at an earlier level
+        # Check against both chosen feats AND auto-granted class features
         feat_names_lower = {f.name.lower() for f in build.feats}
+        if build.class_name:
+            class_features = get_class_features(build.class_name, build.character_level)
+            feat_names_lower.update(f.lower() for f in class_features)
         if prereq.value.lower() in feat_names_lower:
             return True, ""
-        # Handle "X or Y" prerequisites
         if " or " in prereq.value:
             alternatives = [a.strip() for a in prereq.value.split(" or ")]
             if any(a.lower() in feat_names_lower for a in alternatives):

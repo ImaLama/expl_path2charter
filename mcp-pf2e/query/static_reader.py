@@ -2,6 +2,7 @@
 
 import json
 import re
+from functools import lru_cache
 from pathlib import Path
 
 from .types import FeatOption
@@ -93,6 +94,7 @@ def _list_feats_flat(base_dir: Path, max_level: int) -> list[FeatOption]:
     return feats
 
 
+@lru_cache(maxsize=32)
 def get_class_data(class_name: str) -> dict | None:
     """Load a class JSON file and return its full data."""
     filepath = _STATIC_ROOT / "classes" / f"{_slugify(class_name)}.json"
@@ -104,6 +106,7 @@ def get_class_data(class_name: str) -> dict | None:
         return None
 
 
+@lru_cache(maxsize=32)
 def get_feat_slot_levels(class_name: str) -> dict[str, list[int]]:
     """Get feat slot level arrays for a class.
 
@@ -172,6 +175,7 @@ def list_available_ancestries() -> list[str]:
     return sorted(d.name for d in ancestry_dir.iterdir() if d.is_dir())
 
 
+@lru_cache(maxsize=32)
 def get_class_trained_skills(class_name: str) -> dict:
     """Get class skill training info.
 
@@ -318,6 +322,7 @@ def _fuzzy_match(name: str, candidates: list[str]) -> str | None:
     return None
 
 
+@lru_cache(maxsize=32)
 def get_ancestry_data(ancestry_name: str) -> dict | None:
     """Load ancestry JSON and return its full data."""
     filepath = _STATIC_ROOT / "ancestries" / f"{_slugify(ancestry_name)}.json"
@@ -344,6 +349,23 @@ def get_background_data(background_name: str) -> dict | None:
         except (json.JSONDecodeError, UnicodeDecodeError):
             continue
     return None
+
+
+@lru_cache(maxsize=64)
+def get_class_features(class_name: str, max_level: int = 20) -> list[str]:
+    """Get auto-granted class feature names up to a given level."""
+    data = get_class_data(class_name)
+    if not data:
+        return []
+    items = data.get("system", {}).get("items", {})
+    features = []
+    for key, item in items.items():
+        lvl = item.get("level", 99)
+        if isinstance(lvl, int) and lvl <= max_level:
+            name = item.get("name", "")
+            if name:
+                features.append(name)
+    return features
 
 
 def list_available_archetypes() -> list[str]:

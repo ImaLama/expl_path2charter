@@ -160,6 +160,17 @@ def run_build(
             result["error"] = "Could not determine class from concept"
             return result
 
+    # Step 1.6: Pre-validate skeleton before expensive generation
+    from query.static_reader import list_available_classes, list_available_ancestries, list_heritages
+    available_classes = list_available_classes()
+    if class_name and class_name not in available_classes:
+        if verbose:
+            print(f"[pipeline] WARNING: class '{class_name}' not found in data. Available: {', '.join(available_classes[:10])}")
+    available_ancestries = list_available_ancestries()
+    if ancestry_name and ancestry_name not in available_ancestries:
+        if verbose:
+            print(f"[pipeline] WARNING: ancestry '{ancestry_name}' not found in data. Available: {', '.join(available_ancestries[:10])}")
+
     # Step 2: Decompose build options
     if verbose:
         print(f"[pipeline] Decomposing build: {class_name.title()} lvl {character_level}" +

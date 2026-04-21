@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from .types import ParsedBuild, ParsedFeatChoice, ValidationResult
 from .parser import parse_build
 from .rules import (
+    check_duplicate_feats,
     check_feat_existence,
     check_level_legality,
     check_slot_counts,
@@ -41,6 +42,7 @@ class BuildValidator:
     def _run_rules(self, build: ParsedBuild) -> ValidationResult:
         """Run all validation rules against a parsed build."""
         all_errors = []
+        all_errors.extend(check_duplicate_feats(build))
         all_errors.extend(check_feat_existence(build, self._db, skip_semantic=self._skip_semantic))
         all_errors.extend(check_level_legality(build, self._db))
         all_errors.extend(check_slot_counts(build))

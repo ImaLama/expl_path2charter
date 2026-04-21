@@ -22,6 +22,28 @@ except ImportError:
     PF2eDB = None
 
 
+_REPEATABLE_FEATS = {"additional lore", "assurance", "skill training"}
+
+
+def check_duplicate_feats(build: ParsedBuild) -> list[ValidationError]:
+    """Most PF2e feats can only be taken once."""
+    errors = []
+    seen: dict[str, int] = {}
+    for feat in build.feats:
+        name_lower = feat.name.lower()
+        if name_lower in _REPEATABLE_FEATS:
+            continue
+        if name_lower in seen:
+            errors.append(ValidationError(
+                rule="duplicate_feat",
+                severity="error",
+                message=f'"{feat.name}" is taken more than once. Most feats can only be taken once.',
+                feat_name=feat.name,
+            ))
+        seen[name_lower] = seen.get(name_lower, 0) + 1
+    return errors
+
+
 def check_feat_existence(
     build: ParsedBuild,
     db: "PF2eDB | None" = None,
@@ -40,6 +62,15 @@ def check_feat_existence(
     for feat in build.feats:
         entry = db.get_entry(feat.name, content_type=None)
         if entry:
+            rarity = entry.get("system", {}).get("traits", {}).get("rarity", "common")
+            if rarity in ("uncommon", "rare", "unique"):
+                errors.append(ValidationError(
+                    rule="rarity",
+                    severity="warning",
+                    message=f'"{feat.name}" is {rarity} — typically requires GM permission.',
+                    feat_name=feat.name,
+                    details={"rarity": rarity},
+                ))
             continue
 
         if not skip_semantic:
