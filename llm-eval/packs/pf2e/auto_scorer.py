@@ -160,16 +160,16 @@ class PF2eAutoScorer(AutoScorer):
     def __init__(
         self,
         db_path: str = str(Path(__file__).resolve().parent.parent.parent.parent / "_state" / "vector_db" / "pf2e_chroma"),
-        collection: str = "foundry_mxbai",
+        model: str = "mxbai",
     ):
         self.db_path = db_path
-        self.collection = collection
+        self.model = model
         self._db = None
 
     def _get_db(self):
         if self._db is None:
             from server.db import PF2eDB
-            self._db = PF2eDB(db_path=self.db_path)
+            self._db = PF2eDB(db_path=self.db_path, model=self.model)
         return self._db
 
     def score(self, prompt: Prompt, result: GenerationResult) -> dict:
@@ -196,7 +196,7 @@ class PF2eAutoScorer(AutoScorer):
 
         for name in claimed_names:
             # Try exact name match
-            entry = db.get_entry(name, source=self.collection)
+            entry = db.get_entry(name, content_type=None)
             if entry and "error" not in entry:
                 level = entry.get("system", {}).get("level", {}).get("value", "?")
                 etype = entry.get("type", "?")
@@ -205,7 +205,7 @@ class PF2eAutoScorer(AutoScorer):
                 # Fallback: semantic search with high threshold
                 results = db.search(
                     query=name,
-                    source=self.collection,
+                    content_type=None,
                     n_results=1,
                 )
                 if results and results[0]["relevance_score"] > 0.85:
@@ -268,13 +268,13 @@ class PF2eAutoScorer(AutoScorer):
         not_found = []
 
         for name in claimed_names:
-            entry = db.get_entry(name, source=self.collection)
+            entry = db.get_entry(name, content_type=None)
             if entry and "error" not in entry:
                 level = entry.get("system", {}).get("level", {}).get("value", "?")
                 etype = entry.get("type", "?")
                 verified.append(f"- {name} ({etype}, level {level})")
             else:
-                results = db.search(query=name, source=self.collection, n_results=1)
+                results = db.search(query=name, content_type=None, n_results=1)
                 if results and results[0]["relevance_score"] > 0.85:
                     match = results[0]
                     verified.append(

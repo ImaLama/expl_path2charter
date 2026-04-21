@@ -3,8 +3,9 @@
 import json
 from pathlib import Path
 
-from .foundry_parser import PF2eDocument
+from .foundry_parser import PF2eDocument, TOKEN_THRESHOLD, _estimate_tokens
 from .text_cleaners import strip_pf2etools_tags, flatten_pf2etools_entries
+from dataclasses import replace
 
 
 # Map top-level JSON keys to content types
@@ -53,6 +54,58 @@ BUILD_RELEVANT_KEYS = {
     "ancestry", "heritage", "versatileHeritage", "background",
     "action", "item", "archetype",
 }
+
+
+def _split_pf2etools_entry(doc: PF2eDocument, entries: list) -> list[PF2eDocument]:
+    """Split a long pf2etools doc by its top-level entries list."""
+    if _estimate_tokens(doc.text) <= TOKEN_THRESHOLD or len(entries) <= 1:
+        return [doc]
+
+    header_parts = [f"[{doc.content_type.upper()}] {doc.name}"]
+    if doc.level:
+        header_parts.append(f"Level {doc.level}")
+    if doc.traits:
+        header_parts.append(f"Traits: {', '.join(doc.traits)}")
+    header = " | ".join(header_parts)
+
+    chunks = []
+    current_parts = []
+    current_tokens = _estimate_tokens(header)
+
+    def flush(idx):
+        if not current_parts:
+            return
+        section_text = " ".join(current_parts)
+        chunk = replace(
+            doc,
+            id=f"{doc.id}__chunk_{idx}",
+            text=f"{header}\n{section_text}",
+            raw_json=doc.raw_json if idx == 0 else "",
+            parent_id=doc.id,
+            chunk_index=idx,
+            is_chunk=True,
+        )
+        chunks.append(chunk)
+
+    chunk_idx = 0
+    for entry in entries:
+        if isinstance(entry, str):
+            part = strip_pf2etools_tags(entry)
+        elif isinstance(entry, dict) and "name" in entry:
+            part = entry["name"] + ": " + flatten_pf2etools_entries(entry.get("entries", []))
+        else:
+            part = flatten_pf2etools_entries([entry])
+        part_tokens = _estimate_tokens(part)
+        if current_tokens + part_tokens > TOKEN_THRESHOLD and current_parts:
+            flush(chunk_idx)
+            chunk_idx += 1
+            current_parts = []
+            current_tokens = _estimate_tokens(header)
+        current_parts.append(part)
+        current_tokens += part_tokens
+
+    flush(chunk_idx)
+    return chunks if chunks else [doc]
 
 
 def _slugify(name: str, source: str) -> str:
@@ -111,15 +164,30 @@ def _parse_entry(entry: dict, content_type: str, filepath: Path) -> PF2eDocument
         else:
             extra_parts.append(f"Frequency: {freq}")
 
-    text_parts = [
-        f"{name} ({content_type}, level {level})",
-        f"Traits: {', '.join(traits)}" if traits else "",
-        f"Prerequisites: {prerequisites}" if prerequisites else "",
-        f"Rarity: {rarity}" if rarity != "common" else "",
-        " ".join(extra_parts),
-        description,
-    ]
-    text = ". ".join(p for p in text_parts if p)
+    # Richer metadata
+    category = entry.get("category", "") or ""
+    action_type = ""
+    activity = entry.get("activity", {})
+    if isinstance(activity, dict) and activity.get("entry"):
+        action_type = str(activity["entry"])
+    has_prerequisites = bool(prerequisites)
+
+    # Build embedding text with structured header prefix
+    header_parts = [f"[{content_type.upper()}] {name}"]
+    if level:
+        header_parts.append(f"Level {level}")
+    if category:
+        header_parts.append(f"Category: {category}")
+    if traits:
+        header_parts.append(f"Traits: {', '.join(traits)}")
+    if prerequisites:
+        header_parts.append(f"Prerequisites: {prerequisites}")
+    if rarity != "common":
+        header_parts.append(f"Rarity: {rarity}")
+    header = " | ".join(header_parts)
+    body_parts = [" ".join(extra_parts), description]
+    body = " ".join(p for p in body_parts if p)
+    text = f"{header}\n{body}" if body else header
 
     raw = json.dumps(entry, ensure_ascii=False)
     if len(raw) > 8000:
@@ -136,6 +204,9 @@ def _parse_entry(entry: dict, content_type: str, filepath: Path) -> PF2eDocument
         rarity=rarity,
         text=text,
         raw_json=raw,
+        category=category,
+        has_prerequisites=has_prerequisites,
+        action_type=action_type,
     )
 
 
@@ -192,7 +263,9 @@ def parse_pf2etools_data(
                 doc = _parse_entry(entry, content_type, filepath)
                 if doc and doc.id not in seen_ids:
                     seen_ids.add(doc.id)
-                    documents.append(doc)
+                    raw_entries = entry.get("entries", [])
+                    for chunk in _split_pf2etools_entry(doc, raw_entries):
+                        documents.append(chunk)
 
     # Report counts by content type
     type_counts = {}

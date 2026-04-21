@@ -19,7 +19,9 @@ def register_tools(app: Server, db: PF2eDB):
                 description=(
                     "Search Pathfinder 2e rules, feats, spells, classes, ancestries, "
                     "equipment, and other game content using semantic search. "
-                    "Returns the most relevant entries matching your query."
+                    "Returns the most relevant entries matching your query. "
+                    "Searches per-type collections (feats, spells, etc.) — "
+                    "specify content_type to target a specific collection."
                 ),
                 inputSchema={
                     "type": "object",
@@ -30,7 +32,7 @@ def register_tools(app: Server, db: PF2eDB):
                         },
                         "content_type": {
                             "type": "string",
-                            "description": "Filter by content type",
+                            "description": "Filter by content type (also selects the collection to search)",
                             "enum": [
                                 "feat", "spell", "class", "class-feature",
                                 "ancestry", "ancestry-feature", "heritage",
@@ -51,16 +53,19 @@ def register_tools(app: Server, db: PF2eDB):
                             "items": {"type": "string"},
                             "description": "Required traits (AND logic, e.g., ['monk', 'ki'])",
                         },
+                        "category": {
+                            "type": "string",
+                            "enum": ["ancestry", "class", "skill", "general", "archetype", "classfeature"],
+                            "description": "Feat/feature category filter",
+                        },
+                        "action_type": {
+                            "type": "string",
+                            "enum": ["passive", "action", "reaction", "free"],
+                            "description": "Filter by action type",
+                        },
                         "source": {
                             "type": "string",
-                            "enum": [
-                                "foundry", "pf2etools",
-                                "foundry_nomic", "pf2etools_nomic",
-                                "foundry_mxbai", "pf2etools_mxbai",
-                                "foundry_bgem3", "pf2etools_bgem3",
-                            ],
-                            "default": "foundry",
-                            "description": "Collection to search. 'foundry'/'pf2etools' are nomic-embed-text. Suffixed variants use different embedding models for comparison.",
+                            "description": "Legacy: literal collection name override. Prefer content_type instead.",
                         },
                         "n_results": {
                             "type": "integer",
@@ -86,17 +91,11 @@ def register_tools(app: Server, db: PF2eDB):
                         },
                         "content_type": {
                             "type": "string",
-                            "description": "Narrow search to specific content type",
+                            "description": "Narrow search to specific content type / collection",
                         },
                         "source": {
                             "type": "string",
-                            "enum": [
-                                "foundry", "pf2etools",
-                                "foundry_nomic", "pf2etools_nomic",
-                                "foundry_mxbai", "pf2etools_mxbai",
-                                "foundry_bgem3", "pf2etools_bgem3",
-                            ],
-                            "default": "foundry",
+                            "description": "Legacy: literal collection name override. Prefer content_type instead.",
                         },
                     },
                     "required": ["name"],
@@ -113,13 +112,7 @@ def register_tools(app: Server, db: PF2eDB):
                     "properties": {
                         "source": {
                             "type": "string",
-                            "enum": [
-                                "foundry", "pf2etools",
-                                "foundry_nomic", "pf2etools_nomic",
-                                "foundry_mxbai", "pf2etools_mxbai",
-                                "foundry_bgem3", "pf2etools_bgem3",
-                            ],
-                            "default": "foundry",
+                            "description": "Optional: specific collection name to inspect",
                         },
                     },
                 },
@@ -131,11 +124,13 @@ def register_tools(app: Server, db: PF2eDB):
         if name == "search_pf2e_rules":
             results = db.search(
                 query=arguments["query"],
-                source=arguments.get("source", "foundry"),
+                source=arguments.get("source"),
                 content_type=arguments.get("content_type"),
                 level_min=arguments.get("level_min"),
                 level_max=arguments.get("level_max"),
                 traits=arguments.get("traits"),
+                category=arguments.get("category"),
+                action_type=arguments.get("action_type"),
                 n_results=arguments.get("n_results", 5),
             )
             return [TextContent(type="text", text=json.dumps(results, indent=2))]
@@ -143,7 +138,7 @@ def register_tools(app: Server, db: PF2eDB):
         elif name == "get_pf2e_entry":
             entry = db.get_entry(
                 name=arguments["name"],
-                source=arguments.get("source", "foundry"),
+                source=arguments.get("source"),
                 content_type=arguments.get("content_type"),
             )
             if entry:
@@ -151,12 +146,11 @@ def register_tools(app: Server, db: PF2eDB):
             return [TextContent(type="text", text=f"No entry found with name: {arguments['name']}")]
 
         elif name == "list_pf2e_content_types":
-            source = arguments.get("source", "foundry")
+            source = arguments.get("source")
             try:
                 types = db.list_content_types(source)
                 collections = db.list_collections()
                 result = {
-                    "source": source,
                     "content_types": types,
                     "collections": collections,
                 }

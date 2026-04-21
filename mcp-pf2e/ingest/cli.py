@@ -3,12 +3,13 @@
 import argparse
 import sys
 import time
+from collections import defaultdict
 from pathlib import Path
 
 import chromadb
 
 from .embeddings import OllamaEmbeddingFunction
-from .foundry_parser import parse_foundry_packs, PACK_TYPE_MAP
+from .foundry_parser import parse_foundry_packs, PACK_TYPE_MAP, CONTENT_TYPE_TO_COLLECTION
 from .pf2etools_parser import parse_pf2etools_data
 from .loader import load_documents
 
@@ -97,32 +98,41 @@ def main():
         sys.exit(1)
 
     start = time.time()
+    all_docs = []
 
-    # Ingest FoundryVTT
+    # Parse FoundryVTT
     if args.source in ("foundry", "all"):
         foundry_dir = data_dir / "pf2e" / "packs" / "pf2e"
-        collection_name = f"foundry_{suffix}"
         if foundry_dir.exists():
-            print(f"\n=== FoundryVTT → {collection_name} ===")
+            print(f"\n=== Parsing FoundryVTT ===")
             docs = parse_foundry_packs(foundry_dir, categories=args.categories)
-            print(f"  Parsed {len(docs)} documents")
-            if docs:
-                load_documents(client, collection_name, docs, embed_fn, args.batch_size, args.wipe)
+            print(f"  Parsed {len(docs)} documents (incl. chunks)")
+            all_docs.extend(docs)
         else:
             print(f"FoundryVTT data not found at {foundry_dir}")
 
-    # Ingest Pf2eTools
+    # Parse Pf2eTools
     if args.source in ("pf2etools", "all"):
         tools_dir = data_dir / "Pf2eTools" / "data"
-        collection_name = f"pf2etools_{suffix}"
         if tools_dir.exists():
-            print(f"\n=== Pf2eTools → {collection_name} ===")
+            print(f"\n=== Parsing Pf2eTools ===")
             docs = parse_pf2etools_data(tools_dir, categories=args.categories)
-            print(f"  Parsed {len(docs)} documents")
-            if docs:
-                load_documents(client, collection_name, docs, embed_fn, args.batch_size, args.wipe)
+            print(f"  Parsed {len(docs)} documents (incl. chunks)")
+            all_docs.extend(docs)
         else:
             print(f"Pf2eTools data not found at {tools_dir}")
+
+    # Group by target collection and ingest per-type
+    groups = defaultdict(list)
+    for doc in all_docs:
+        coll_base = CONTENT_TYPE_TO_COLLECTION.get(doc.content_type, "misc")
+        groups[coll_base].append(doc)
+
+    print(f"\n=== Ingesting into per-type collections ===")
+    for coll_base, group_docs in sorted(groups.items()):
+        coll_name = f"{coll_base}_{suffix}"
+        print(f"\n  --- {coll_name} ({len(group_docs)} docs) ---")
+        load_documents(client, coll_name, group_docs, embed_fn, args.batch_size, args.wipe)
 
     elapsed = time.time() - start
     print(f"\nTotal time: {elapsed:.1f}s")

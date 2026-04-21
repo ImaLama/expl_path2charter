@@ -47,6 +47,12 @@ def load_documents(
                 "source_book": d.source_book,
                 "rarity": d.rarity,
                 "raw_json": d.raw_json,
+                "category": d.category,
+                "has_prerequisites": d.has_prerequisites,
+                "action_type": d.action_type,
+                "parent_id": d.parent_id,
+                "chunk_index": d.chunk_index,
+                "is_chunk": d.is_chunk,
             }
             for d in batch
         ]
