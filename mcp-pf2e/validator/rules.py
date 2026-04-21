@@ -21,10 +21,14 @@ except ImportError:
 def check_feat_existence(
     build: ParsedBuild,
     db: "PF2eDB | None" = None,
+    skip_semantic: bool = False,
 ) -> list[ValidationError]:
-    """Verify every named feat exists in the database."""
+    """Verify every named feat exists in the database.
+
+    get_entry() does exact name lookup (no embedding needed).
+    Semantic search fallback (needs mxbai loaded) is skipped when skip_semantic=True.
+    """
     errors = []
-    verified = []
 
     if db is None:
         return errors
@@ -32,9 +36,9 @@ def check_feat_existence(
     for feat in build.feats:
         entry = db.get_entry(feat.name, content_type=None)
         if entry:
-            verified.append(feat.name)
-        else:
-            # Try fuzzy search
+            continue
+
+        if not skip_semantic:
             results = db.search(query=feat.name, n_results=1)
             if results and results[0]["relevance_score"] > 0.85:
                 suggestion = results[0]["name"]
@@ -45,13 +49,14 @@ def check_feat_existence(
                     feat_name=feat.name,
                     details={"suggestion": suggestion, "score": results[0]["relevance_score"]},
                 ))
-            else:
-                errors.append(ValidationError(
-                    rule="feat_existence",
-                    severity="error",
-                    message=f'"{feat.name}" is not a known PF2e feat, spell, or feature.',
-                    feat_name=feat.name,
-                ))
+                continue
+
+        errors.append(ValidationError(
+            rule="feat_existence",
+            severity="error",
+            message=f'"{feat.name}" is not a known PF2e feat, spell, or feature.',
+            feat_name=feat.name,
+        ))
 
     return errors
 

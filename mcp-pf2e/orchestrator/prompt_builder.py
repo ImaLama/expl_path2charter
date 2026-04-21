@@ -15,6 +15,8 @@ CRITICAL RULES:
 - Each feat slot must be filled with exactly one feat from the corresponding list.
 - Feat prerequisites must be satisfied (a feat requiring another feat means that feat was taken at an earlier level).
 - Ability scores use the standard boost system: 4 free boosts at level 1, plus ancestry/background/class boosts.
+- Ability scores must be RAW SCORES (e.g., 10, 12, 14, 16, 18), NOT modifiers. A boost raises a score by 2 (e.g., 10 → 12). Starting base is 10 for all abilities.
+- For general and skill feat slots, use ONLY real PF2e feat names (e.g., "Intimidating Glare", "Assurance", "Toughness"). Do NOT use skill names or generic terms as feat names.
 
 Output your build as valid JSON matching the schema provided in the prompt."""
 
@@ -28,7 +30,7 @@ Output ONLY valid JSON with this exact structure (no markdown, no explanation ou
   "heritage": "<choose an appropriate heritage>",
   "background": "<choose a background>",
   "level": {level},
-  "ability_scores": {{"str": 0, "dex": 0, "con": 0, "int": 0, "wis": 0, "cha": 0}},
+  "ability_scores": {{"str": 10, "dex": 14, "con": 12, "int": 10, "wis": 12, "cha": 18}},
   "levels": {{
 {level_slots}
   }},

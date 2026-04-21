@@ -161,15 +161,13 @@ def run_build(
         print(f"[pipeline] Validating...")
 
     t0 = time.time()
-    db = None
-    if not skip_semantic:
-        try:
-            from server.db import PF2eDB
-            db = PF2eDB()
-        except Exception:
-            pass
+    try:
+        from server.db import PF2eDB
+        db = PF2eDB()
+    except Exception:
+        db = None
 
-    validator = BuildValidator(db=db)
+    validator = BuildValidator(db=db, skip_semantic=skip_semantic)
     build_json = None
 
     if json_mode:
