@@ -13,6 +13,7 @@ from .rules import (
     check_feat_existence,
     check_level_legality,
     check_slot_counts,
+    check_feat_slot_type,
     check_class_feat_access,
     check_prerequisites,
     check_archetype_rules,
@@ -37,6 +38,7 @@ class BuildValidator:
         all_errors.extend(check_feat_existence(build, self._db, skip_semantic=self._skip_semantic))
         all_errors.extend(check_level_legality(build, self._db))
         all_errors.extend(check_slot_counts(build))
+        all_errors.extend(check_feat_slot_type(build, self._db))
         all_errors.extend(check_class_feat_access(build, self._db))
         all_errors.extend(check_prerequisites(build, self._db))
         all_errors.extend(check_archetype_rules(build, self._db))

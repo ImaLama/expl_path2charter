@@ -153,6 +153,56 @@ def check_slot_counts(
     return errors
 
 
+_SLOT_TO_VALID_CATEGORIES = {
+    "skill": {"skill"},
+    "general": {"general"},
+    "ancestry": {"ancestry"},
+    "class": {"class", "classfeature"},
+}
+
+
+def check_feat_slot_type(
+    build: ParsedBuild,
+    db: "PF2eDB | None" = None,
+) -> list[ValidationError]:
+    """Verify feats are in the correct slot type (skill feats in skill slots, etc.)."""
+    errors = []
+
+    if db is None:
+        return errors
+
+    for feat in build.feats:
+        if not feat.slot_type or feat.slot_type == "archetype":
+            continue
+
+        valid_categories = _SLOT_TO_VALID_CATEGORIES.get(feat.slot_type)
+        if not valid_categories:
+            continue
+
+        entry = db.get_entry(feat.name, content_type=None)
+        if not entry:
+            continue
+
+        category = (entry.get("system", {}).get("category", "") or "").lower()
+        traits = entry.get("system", {}).get("traits", {}).get("value", [])
+        traits_lower = [t.lower() for t in traits]
+
+        # Class feats can also be archetype feats
+        if feat.slot_type == "class" and "archetype" in traits_lower:
+            continue
+
+        if category and category not in valid_categories:
+            errors.append(ValidationError(
+                rule="feat_slot_type",
+                severity="error",
+                message=f'"{feat.name}" is a {category} feat, not a {feat.slot_type} feat.',
+                feat_name=feat.name,
+                details={"category": category, "slot_type": feat.slot_type},
+            ))
+
+    return errors
+
+
 def check_class_feat_access(
     build: ParsedBuild,
     db: "PF2eDB | None" = None,
