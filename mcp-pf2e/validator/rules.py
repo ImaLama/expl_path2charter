@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from .types import ParsedBuild, ValidationError
+from .prerequisite import parse_prerequisites, check_prerequisite
 from query.static_reader import get_class_data, get_feat_slot_levels
 
 # Optional: PF2eDB for database-backed feat verification
@@ -179,5 +180,88 @@ def check_class_feat_access(
                 feat_name=feat.name,
                 details={"traits": traits, "class": build.class_name},
             ))
+
+    return errors
+
+
+def check_prerequisites(
+    build: ParsedBuild,
+    db: "PF2eDB | None" = None,
+) -> list[ValidationError]:
+    """Check that each feat's prerequisites are satisfied."""
+    errors = []
+
+    if db is None:
+        return errors
+
+    for feat in build.feats:
+        entry = db.get_entry(feat.name, content_type=None)
+        if not entry:
+            continue
+
+        prereqs_raw = entry.get("system", {}).get("prerequisites", {}).get("value", [])
+        prereq_parts = []
+        for p in prereqs_raw:
+            if isinstance(p, dict):
+                prereq_parts.append(p.get("value", ""))
+            elif isinstance(p, str):
+                prereq_parts.append(p)
+        prereq_string = "; ".join(p for p in prereq_parts if p)
+
+        if not prereq_string:
+            continue
+
+        parsed = parse_prerequisites(prereq_string)
+        for prereq in parsed:
+            satisfied, reason = check_prerequisite(prereq, build)
+            if not satisfied:
+                errors.append(ValidationError(
+                    rule="prerequisite",
+                    severity="error",
+                    message=f'"{feat.name}" {reason}.',
+                    feat_name=feat.name,
+                    details={"prerequisite": prereq.raw, "type": prereq.type},
+                ))
+
+    return errors
+
+
+def check_archetype_rules(
+    build: ParsedBuild,
+    db: "PF2eDB | None" = None,
+) -> list[ValidationError]:
+    """Check PF2e archetype dedication rules.
+
+    - Must take a dedication feat before any other archetype feats from that archetype
+    - Can't take a second dedication until you have 2 non-dedication feats from the first
+    """
+    errors = []
+
+    if db is None:
+        return errors
+
+    dedications = []
+    archetype_feats = []
+
+    for feat in build.feats:
+        entry = db.get_entry(feat.name, content_type=None)
+        if not entry:
+            continue
+        traits = entry.get("system", {}).get("traits", {}).get("value", [])
+        traits_lower = [t.lower() for t in traits]
+
+        if "dedication" in traits_lower:
+            dedications.append(feat.name)
+        elif "archetype" in traits_lower:
+            archetype_feats.append(feat.name)
+
+    # Can't take 2nd dedication without 2 non-dedication archetype feats from the 1st
+    if len(dedications) >= 2 and len(archetype_feats) < 2:
+        errors.append(ValidationError(
+            rule="archetype_rules",
+            severity="error",
+            message=f"Second dedication ({dedications[1]}) requires at least 2 non-dedication archetype feats from the first ({dedications[0]}).",
+            details={"dedications": dedications, "archetype_feats": archetype_feats},
+        ))
 
     return errors

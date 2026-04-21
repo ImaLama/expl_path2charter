@@ -14,6 +14,8 @@ from .rules import (
     check_level_legality,
     check_slot_counts,
     check_class_feat_access,
+    check_prerequisites,
+    check_archetype_rules,
 )
 
 try:
@@ -56,6 +58,8 @@ class BuildValidator:
         all_errors.extend(check_level_legality(build, self._db))
         all_errors.extend(check_slot_counts(build))
         all_errors.extend(check_class_feat_access(build, self._db))
+        all_errors.extend(check_prerequisites(build, self._db))
+        all_errors.extend(check_archetype_rules(build, self._db))
 
         errors = [e for e in all_errors if e.severity == "error"]
         warnings = [e for e in all_errors if e.severity == "warning"]
