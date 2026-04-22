@@ -374,12 +374,11 @@ def run_build(
                     total_narrowed = sum(len(v) for v in valid_skill_feats.values())
                     print(f"[pipeline] Narrowed skill feats to {total_narrowed} options for {len(trained_skills)} trained skills")
 
-            # Remove duplicate feats from ALL levels after first occurrence
+            # Prevent ALL duplicates: remove every taken feat from later levels' enums
             import copy
             _REPEATABLE = {"additional lore", "assurance", "skill training"}
             levels_data = current_build.get("levels", {})
-            feat_first_level: dict[str, int] = {}
-            duplicate_names: set[str] = set()
+            feat_at_level: dict[str, int] = {}  # feat_name_lower → level where taken
             for level_str in sorted(levels_data, key=lambda x: int(x)):
                 slots = levels_data[level_str]
                 if not isinstance(slots, dict):
@@ -388,30 +387,27 @@ def run_build(
                     if not feat_name:
                         continue
                     name_lower = feat_name.lower()
-                    if name_lower in _REPEATABLE:
-                        continue
-                    if name_lower in feat_first_level:
-                        duplicate_names.add(feat_name)
-                    else:
-                        feat_first_level[name_lower] = int(level_str)
+                    if name_lower not in _REPEATABLE and name_lower not in feat_at_level:
+                        feat_at_level[name_lower] = int(level_str)
 
-            if duplicate_names:
+            if feat_at_level:
                 if repair_schema is response_schema:
                     repair_schema = copy.deepcopy(response_schema)
                 levels_props = repair_schema.get("properties", {}).get("levels", {}).get("properties", {})
                 removed_count = 0
                 for level_str, level_schema in levels_props.items():
                     lvl = int(level_str)
-                    for dupe in duplicate_names:
-                        first_lvl = feat_first_level.get(dupe.lower(), 0)
-                        if lvl <= first_lvl:
+                    for slot_schema in level_schema.get("properties", {}).values():
+                        if "enum" not in slot_schema:
                             continue
-                        for slot_schema in level_schema.get("properties", {}).values():
-                            if "enum" in slot_schema and dupe in slot_schema["enum"]:
-                                slot_schema["enum"].remove(dupe)
-                                removed_count += 1
+                        original_len = len(slot_schema["enum"])
+                        slot_schema["enum"] = [
+                            f for f in slot_schema["enum"]
+                            if f.lower() in _REPEATABLE or f.lower() not in feat_at_level or feat_at_level[f.lower()] >= lvl
+                        ]
+                        removed_count += original_len - len(slot_schema["enum"])
                 if verbose and removed_count:
-                    print(f"[pipeline] Removed {len(duplicate_names)} duplicate feat(s) from ALL later level enums: {', '.join(sorted(duplicate_names))}")
+                    print(f"[pipeline] Prevented duplicates: removed {removed_count} already-taken feats from later level enums")
 
             # Dedication-aware repair: remove invalid second dedication from enums
             dedications_in_build = []
