@@ -37,11 +37,19 @@ Examples:
     parser.add_argument("--output", help="Save result to directory")
     parser.add_argument("--request", default="", help="Optional free-text flavor for the prompt")
     parser.add_argument("--quiet", action="store_true", help="Suppress step-by-step output")
+    parser.add_argument("--num-ctx", type=int, default=None, help="Ollama context window size (default: 16384)")
+    parser.add_argument("--repeat-penalty", type=float, default=None, help="Ollama repeat penalty (default: 1.1)")
 
     args = parser.parse_args()
 
     if not args.class_name and not args.request:
         parser.error("Either --class or --request is required. Use --request for open-ended concepts.")
+
+    cli_ollama_opts = {}
+    if args.num_ctx is not None:
+        cli_ollama_opts["num_ctx"] = args.num_ctx
+    if args.repeat_penalty is not None:
+        cli_ollama_opts["repeat_penalty"] = args.repeat_penalty
 
     result = run_build(
         class_name=args.class_name,
@@ -52,6 +60,7 @@ Examples:
         provider_key=args.model,
         max_repairs=args.max_repairs,
         output_format=args.output_format,
+        ollama_options=cli_ollama_opts or None,
         verbose=not args.quiet,
     )
 

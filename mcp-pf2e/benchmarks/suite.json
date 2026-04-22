@@ -1,5 +1,5 @@
 {
-  "version": "1.0",
+  "version": "1.1",
   "cases": [
     {
       "id": "simple-fighter",
@@ -114,34 +114,79 @@
   ],
   "run_configs": [
     {
-      "id": "qwen3-schema-on",
-      "model": "ollama-qwen3-32b",
-      "judge_model": "mistral-small3.2:24b",
-      "schema_enforced": true,
-      "temperature": 0.5,
-      "max_repairs": 2,
-      "use_vector_ranking": false,
-      "notes": "Qwen3 32B thinking model, schema enforced"
-    },
-    {
-      "id": "qwen25-coder-schema-on",
-      "model": "ollama-qwen25-coder",
-      "judge_model": "mistral-small3.2:24b",
-      "schema_enforced": true,
-      "temperature": 0.5,
-      "max_repairs": 2,
-      "use_vector_ranking": false,
-      "notes": "Qwen2.5-Coder 32B non-thinking, schema enforced"
-    },
-    {
-      "id": "mistral-small-schema-on",
+      "id": "mistral-small",
       "model": "ollama-mistral-small",
       "judge_model": "qwen3:32b",
       "schema_enforced": true,
       "temperature": 0.5,
       "max_repairs": 2,
       "use_vector_ranking": false,
-      "notes": "Mistral-Small 3.2 24B, judged by Qwen3 (cross-judge)"
+      "notes": "Mistral-Small 3.2 24B — current default, cross-judged by Qwen3"
+    },
+    {
+      "id": "mistral-small-tuned",
+      "model": "ollama-mistral-small",
+      "judge_model": "qwen3:32b",
+      "schema_enforced": true,
+      "temperature": 0.4,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "ollama_options": {
+        "num_ctx": 32768,
+        "repeat_penalty": 1.2,
+        "min_p": 0.05
+      },
+      "notes": "Mistral-Small tuned: lower temp, repeat penalty, min_p, 32K context"
+    },
+    {
+      "id": "qwen25-coder",
+      "model": "ollama-qwen25-coder",
+      "judge_model": "mistral-small3.2:24b",
+      "schema_enforced": true,
+      "temperature": 0.5,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "notes": "Qwen2.5-Coder 32B — strong JSON, judged by Mistral"
+    },
+    {
+      "id": "qwen25",
+      "model": "ollama-qwen25",
+      "judge_model": "mistral-small3.2:24b",
+      "schema_enforced": true,
+      "temperature": 0.5,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "notes": "Qwen2.5 32B non-coder — general reasoning, judged by Mistral"
+    },
+    {
+      "id": "gemma3",
+      "model": "ollama-gemma3-27b",
+      "judge_model": "mistral-small3.2:24b",
+      "schema_enforced": true,
+      "temperature": 0.5,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "notes": "Gemma 3 27B — untested, strong reasoner, judged by Mistral"
+    },
+    {
+      "id": "phi4",
+      "model": "ollama-phi4",
+      "judge_model": "mistral-small3.2:24b",
+      "schema_enforced": true,
+      "temperature": 0.5,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "notes": "Phi-4 14B — smallest model, speed test, judged by Mistral"
+    },
+    {
+      "id": "qwen3-moe",
+      "model": "ollama-qwen3-30b-a3b",
+      "judge_model": "mistral-small3.2:24b",
+      "schema_enforced": true,
+      "temperature": 0.5,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "notes": "Qwen3 30B-A3B MoE — fast, thinking, 3B active, judged by Mistral"
     },
     {
       "id": "mistral-with-ranking",
@@ -161,7 +206,7 @@
       "temperature": 0.5,
       "max_repairs": 2,
       "use_vector_ranking": true,
-      "notes": "Qwen3 + vector DB feat ranking (future)"
+      "notes": "Qwen3 32B + vector DB feat ranking"
     }
   ]
 }

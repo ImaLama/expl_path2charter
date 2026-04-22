@@ -17,7 +17,7 @@ RESULTS_PATH = Path(__file__).parent / "results.jsonl"
 
 SUPPORTED_CONFIG_KEYS = {
     "id", "model", "judge_model", "schema_enforced", "temperature", "max_repairs",
-    "use_vector_ranking", "notes",
+    "use_vector_ranking", "ollama_options", "notes",
 }
 
 
@@ -74,6 +74,7 @@ def run_case(case: dict, config: dict, unsupported: list[str]) -> dict:
         temperature=config.get("temperature", 0.7),
         output_format=output_format,
         use_vector_ranking=config.get("use_vector_ranking", False),
+        ollama_options=config.get("ollama_options"),
         verbose=True,
     )
 
@@ -191,6 +192,7 @@ def run_benchmark(
                     "schema_enforced": config.get("schema_enforced", True),
                     "temperature": config.get("temperature", 0.7),
                     "max_repairs": config.get("max_repairs", 2),
+                    "ollama_options": config.get("ollama_options"),
                     "suite_version": suite.get("version", "?"),
                     "difficulty": case.get("difficulty", "?"),
                     "wall_time": wall_time,

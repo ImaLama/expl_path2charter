@@ -31,16 +31,20 @@ OLLAMA_OPENAI_URL = f"{OLLAMA_BASE_URL}/v1"
 
 LOCAL_MODELS = {
     "ollama-qwen3-32b": "qwen3:32b",
+    "ollama-qwen3-30b-a3b": "qwen3:30b-a3b",
     "ollama-qwen32b": "qwen2.5:32b-instruct-q5_K_M",
+    "ollama-qwen25": "qwen2.5:32b",
     "ollama-qwen25-coder": "qwen2.5-coder:32b-instruct-q6_K",
+    "ollama-gemma3-27b": "gemma3:27b",
+    "ollama-phi4": "phi4:14b",
     "ollama-deepseek32b": "deepseek-r1:32b",
     "ollama-llama70b": "llama3.1:70b-instruct-q4_K_M",
     "ollama-nemo": "mistral-nemo:12b-instruct",
     "ollama-mistral-small": "mistral-small3.2:24b",
 }
 
-LARGE_MODELS = {"ollama-qwen3-32b", "ollama-qwen32b", "ollama-qwen25-coder", "ollama-deepseek32b", "ollama-llama70b"}
-THINKING_MODELS = {"ollama-qwen3-32b", "ollama-deepseek32b"}
+LARGE_MODELS = {"ollama-qwen3-32b", "ollama-qwen32b", "ollama-qwen25", "ollama-qwen25-coder", "ollama-deepseek32b", "ollama-llama70b"}
+THINKING_MODELS = {"ollama-qwen3-32b", "ollama-qwen3-30b-a3b", "ollama-deepseek32b"}
 
 
 def _unload_all_models():
@@ -61,6 +65,11 @@ def _unload_all_models():
         pass
 
 
+_DEFAULT_OLLAMA_OPTIONS = {
+    "num_ctx": 16384,
+}
+
+
 def _call_ollama(
     model: str,
     prompt: str,
@@ -69,6 +78,7 @@ def _call_ollama(
     json_mode: bool = True,
     response_schema: dict | None = None,
     max_tokens: int = 2048,
+    ollama_options: dict | None = None,
 ) -> tuple[str, float, dict]:
     """Call Ollama via OpenAI-compatible API. Returns (content, elapsed_seconds, usage)."""
     client = OpenAI(base_url=OLLAMA_OPENAI_URL, api_key="ollama")
@@ -78,7 +88,8 @@ def _call_ollama(
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
 
-    extra = {"extra_body": {"options": {"num_ctx": 8192}}}
+    opts = {**_DEFAULT_OLLAMA_OPTIONS, **(ollama_options or {})}
+    extra = {"extra_body": {"options": opts}}
     if response_schema:
         extra["response_format"] = {
             "type": "json_schema",
@@ -128,6 +139,7 @@ def _run_planned_generation(
     ranked_feats,
     all_usages: list,
     timings: dict,
+    ollama_options: dict | None = None,
 ) -> dict | None:
     """Two-pass generation: plan feats first, then fill in build details.
 
@@ -145,6 +157,7 @@ def _run_planned_generation(
     plan_raw, plan_time, plan_usage = _call_ollama(
         model, plan_prompt, _PLAN_SYSTEM_PROMPT, temperature,
         response_schema=plan_schema, max_tokens=plan_max,
+        ollama_options=ollama_options,
     )
     timings["plan"] = plan_time
     all_usages.append(plan_usage)
@@ -240,6 +253,7 @@ def _run_planned_generation(
         plan_raw, repair_time, repair_usage = _call_ollama(
             model, repair_input, _PLAN_SYSTEM_PROMPT, repair_temperature,
             response_schema=repair_plan_schema, max_tokens=plan_max,
+            ollama_options=ollama_options,
         )
         timings["plan_repair"] = repair_time
         all_usages.append(repair_usage)
@@ -314,8 +328,15 @@ def _run_planned_generation(
             if any(a in pval_lower for a in ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]):
                 constraints.append(f"{feat.name} requires: {pval}")
 
+    # Inject class-granted fixed skills as mandatory
+    from query.static_reader import get_class_trained_skills
+    class_skills = get_class_trained_skills(class_name)
+    for skill in class_skills["fixed"]:
+        if skill not in required_skills:
+            required_skills[skill] = "trained"
+
     if verbose and required_skills:
-        print(f"[pipeline] Required skills from feat prereqs: {required_skills}")
+        print(f"[pipeline] Required skills (feat prereqs + class grants): {required_skills}")
     if verbose and constraints:
         print(f"[pipeline] {len(constraints)} ability constraints forwarded to full build")
 
@@ -331,6 +352,7 @@ def _run_planned_generation(
     raw_output, gen_time, gen_usage = _call_ollama(
         model, guided_prompt, build_system_prompt(), 0.5,
         response_schema=guided_schema, max_tokens=gen_max,
+        ollama_options=ollama_options,
     )
     timings["generate"] = gen_time
     all_usages.append(gen_usage)
@@ -384,6 +406,7 @@ def _run_planned_generation(
         raw_output, repair_time, repair_usage = _call_ollama(
             model, repair_input, build_system_prompt(), repair_temperature,
             response_schema=guided_schema, max_tokens=repair_max,
+            ollama_options=ollama_options,
         )
         timings[f"repair_{repair_i + 1}"] = repair_time
         all_usages.append(repair_usage)
@@ -445,6 +468,7 @@ def run_build(
     repair_temperature: float = 0.5,
     output_format: str = "json",
     use_vector_ranking: bool = False,
+    ollama_options: dict | None = None,
     verbose: bool = True,
 ) -> dict:
     """Full build pipeline with optional two-pass mode.
@@ -487,6 +511,7 @@ def run_build(
             model, skeleton_user, skeleton_system, 0.7,
             response_schema=skeleton_schema,
             max_tokens=1024 if provider_key in THINKING_MODELS else 512,
+            ollama_options=ollama_options,
         )
         timings["skeleton"] = skeleton_time
         all_usages.append(skeleton_usage)
@@ -581,6 +606,7 @@ def run_build(
             temperature=temperature, repair_temperature=repair_temperature,
             verbose=verbose, ranked_feats=ranked_feats,
             all_usages=all_usages, timings=timings,
+            ollama_options=ollama_options,
         )
         if planned_result is not None:
             result.update(planned_result)
@@ -616,6 +642,7 @@ def run_build(
     raw_output, gen_time, gen_usage = _call_ollama(
         model, generation_prompt, system_prompt, gen_temp,
         response_schema=response_schema, max_tokens=gen_max_tokens,
+        ollama_options=ollama_options,
     )
     timings["generate"] = gen_time
     all_usages.append(gen_usage)
@@ -795,6 +822,7 @@ def run_build(
         current_output, repair_time, repair_usage = _call_ollama(
             model, repair_input, system_prompt, repair_temperature,
             response_schema=repair_schema, max_tokens=repair_max,
+            ollama_options=ollama_options,
         )
         timings[f"repair_{i + 1}"] = repair_time
         all_usages.append(repair_usage)

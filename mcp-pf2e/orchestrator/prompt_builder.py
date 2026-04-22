@@ -240,11 +240,19 @@ def build_response_schema(options: BuildOptions) -> dict:
             "required": slot_required,
         }
 
+    # Lock class/ancestry to known values — prevents identity drift
+    class_prop = {"type": "string", "enum": [options.spec.class_name]}
+    ancestry_prop = (
+        {"type": "string", "enum": [options.spec.ancestry_name]}
+        if options.spec.ancestry_name
+        else {"type": "string"}
+    )
+
     return {
         "type": "object",
         "properties": {
-            "class": {"type": "string"},
-            "ancestry": {"type": "string"},
+            "class": class_prop,
+            "ancestry": ancestry_prop,
             "heritage": heritage_prop,
             "background": background_prop,
             "level": {"type": "integer"},
@@ -461,6 +469,12 @@ def build_plan_prompt(
         parts.append(f"Ancestry: {options.spec.ancestry_name.title()}")
     parts.append(f"Level: {options.spec.character_level}")
     parts.append("")
+    if options.spec.dedications:
+        ded_names = ", ".join(f"{d.title()} Dedication" for d in options.spec.dedications)
+        parts.append(f"\nREQUIRED DEDICATIONS: This build MUST include: {ded_names}.")
+        parts.append("Take each Dedication feat at the earliest eligible class feat slot.")
+        parts.append("Then take at least 2 non-dedication archetype feats from each before adding another Dedication.\n")
+
     parts.append("Select ONE feat for each slot below. Output ONLY the feat names as JSON.")
     parts.append("Consider synergies across all levels — your choices should build toward a coherent strategy.")
     parts.append("")
