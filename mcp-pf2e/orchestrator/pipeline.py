@@ -100,12 +100,14 @@ def _call_ollama(
     elapsed = time.perf_counter() - t0
 
     content = response.choices[0].message.content or ""
+    finish_reason = response.choices[0].finish_reason or ""
     usage = {}
     if response.usage:
         usage = {
             "prompt_tokens": response.usage.prompt_tokens,
             "completion_tokens": response.usage.completion_tokens,
             "total_tokens": response.usage.total_tokens,
+            "finish_reason": finish_reason,
         }
     return content, round(elapsed, 2), usage
 
@@ -225,12 +227,13 @@ def run_build(
     if verbose:
         print(f"[pipeline] Prompt: {len(generation_prompt)} chars")
         if response_schema:
-            enum_slots = sum(
-                1 for lvl in response_schema.get("properties", {}).get("levels", {}).get("properties", {}).values()
+            enum_sizes = [
+                len(prop.get("enum", []))
+                for lvl in response_schema.get("properties", {}).get("levels", {}).get("properties", {}).values()
                 for prop in lvl.get("properties", {}).values()
                 if "enum" in prop
-            )
-            print(f"[pipeline] Schema: {enum_slots} enum-constrained feat slots")
+            ]
+            print(f"[pipeline] Schema: {len(enum_sizes)} enum-constrained feat slots (largest: {max(enum_sizes)} options)")
 
     # Step 4: Generate (lower temperature with schema enforcement)
     gen_temp = 0.5 if response_schema else temperature
@@ -247,6 +250,10 @@ def run_build(
 
     if verbose:
         print(f"[pipeline] Generated {len(raw_output)} chars in {gen_time}s")
+        if gen_usage.get("finish_reason") == "length":
+            print(f"[pipeline] WARNING: Generation hit token limit ({gen_max_tokens}) — output likely truncated")
+        if len(raw_output) < 100:
+            print(f"[pipeline] WARNING: Unusually short output ({len(raw_output)} chars): {raw_output[:100]}")
 
     # Step 5: Validate
     if verbose:
@@ -298,6 +305,10 @@ def run_build(
 
         if verbose:
             print(f"[pipeline] Repair attempt {i + 1}/{max_repairs}...")
+            dupes = [e for e in validation.errors if e.rule == "duplicate_feat"]
+            if dupes:
+                dupe_names = set(e.feat_name for e in dupes if e.feat_name)
+                print(f"  DUPLICATES: {len(dupes)} duplicate errors ({', '.join(sorted(dupe_names))})")
             for e in validation.errors:
                 print(f"  ERROR: {e.message}")
 
@@ -350,8 +361,12 @@ def run_build(
 
         if verbose:
             print(f"[pipeline] Repair generated {len(current_output)} chars in {repair_time}s")
+            if repair_usage.get("finish_reason") == "length":
+                print(f"[pipeline] WARNING: Repair hit token limit ({repair_max}) — output likely truncated")
             if len(current_output) == 0:
                 print(f"[pipeline] WARNING: Empty repair output — likely token budget exhaustion (thinking consumed all {repair_max} tokens)")
+            elif len(current_output) < 100:
+                print(f"[pipeline] WARNING: Unusually short repair output ({len(current_output)} chars): {current_output[:100]}")
 
         t0v = time.time()
         if json_mode:
