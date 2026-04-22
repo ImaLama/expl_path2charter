@@ -10,6 +10,7 @@ from .static_reader import (
     list_skill_feats,
     list_skill_feats_for_skills,
     list_archetype_feats,
+    list_all_dedication_feats,
     _ALL_SKILLS,
 )
 
@@ -53,20 +54,28 @@ def decompose_build(spec: BuildSpec) -> BuildOptions:
                         archetype_feats_by_max_level[lvl].append(f)
         break  # Only need one pass through the outer loop
 
-    # Class feat slots
+    # Class feat slots — include class feats + all dedications + specified archetype feats
     for lvl in slot_levels["class"]:
         if lvl > spec.character_level:
             break
         slot = FeatSlot(slot_type="class", level=lvl, source=spec.class_name)
         options = list_class_feats(spec.class_name, lvl)
-        # Class feat slots can also be used for archetype feats
+        seen_names = {o.name for o in options}
+
+        # Add ALL dedication feats at this level (allows spontaneous dedication picks)
+        for df in list_all_dedication_feats(lvl):
+            if df.name not in seen_names:
+                options.append(df)
+                seen_names.add(df.name)
+
+        # Add archetype feats from specified dedications
         if spec.dedications:
             arch_opts = archetype_feats_by_max_level.get(lvl, [])
-            seen_names = {o.name for o in options}
             for af in arch_opts:
                 if af.name not in seen_names:
                     options.append(af)
                     seen_names.add(af.name)
+
         slot_options.append(SlotOptions(slot=slot, options=sorted(options, key=lambda f: (f.level, f.name))))
 
     # Ancestry feat slots

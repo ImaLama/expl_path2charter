@@ -368,6 +368,25 @@ def get_class_features(class_name: str, max_level: int = 20) -> list[str]:
     return features
 
 
+@lru_cache(maxsize=32)
+def list_all_dedication_feats(max_level: int) -> list[FeatOption]:
+    """List ALL archetype dedication feats up to max_level across all archetypes."""
+    arch_dir = _STATIC_ROOT / "feats" / "archetype"
+    if not arch_dir.exists():
+        return []
+    dedications = []
+    for archetype_dir in arch_dir.iterdir():
+        if not archetype_dir.is_dir():
+            continue
+        for filepath in archetype_dir.rglob("*.json"):
+            feat = _parse_feat_file(filepath)
+            if not feat or feat.level > max_level:
+                continue
+            if "dedication" in [t.lower() for t in feat.traits]:
+                dedications.append(feat)
+    return sorted(dedications, key=lambda f: (f.level, f.name))
+
+
 def list_available_archetypes() -> list[str]:
     """List all available archetype names."""
     arch_dir = _STATIC_ROOT / "feats" / "archetype"

@@ -18,7 +18,10 @@ from query.decomposer import get_build_options
 from query.types import BuildOptions
 from validator.engine import BuildValidator
 from validator.repair import format_repair_prompt
-from orchestrator.prompt_builder import build_system_prompt, build_generation_prompt, build_skeleton_prompts
+from orchestrator.prompt_builder import (
+    build_system_prompt, build_generation_prompt, build_skeleton_prompts,
+    build_skeleton_schema, build_response_schema,
+)
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 OLLAMA_OPENAI_URL = f"{OLLAMA_BASE_URL}/v1"
@@ -32,6 +35,7 @@ LOCAL_MODELS = {
 }
 
 LARGE_MODELS = {"ollama-qwen3-32b", "ollama-qwen32b", "ollama-deepseek32b", "ollama-llama70b"}
+THINKING_MODELS = {"ollama-qwen3-32b", "ollama-deepseek32b"}
 
 
 def _unload_all_models():
@@ -58,7 +62,8 @@ def _call_ollama(
     system_prompt: str,
     temperature: float = 0.7,
     json_mode: bool = True,
-    max_tokens: int = 8192,
+    response_schema: dict | None = None,
+    max_tokens: int = 2048,
 ) -> tuple[str, float]:
     """Call Ollama via OpenAI-compatible API. Returns (content, elapsed_seconds)."""
     client = OpenAI(base_url=OLLAMA_OPENAI_URL, api_key="ollama")
@@ -69,7 +74,16 @@ def _call_ollama(
     messages.append({"role": "user", "content": prompt})
 
     extra = {"extra_body": {"options": {"num_ctx": 8192}}}
-    if json_mode:
+    if response_schema:
+        extra["response_format"] = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "CharacterBuild",
+                "strict": True,
+                "schema": response_schema,
+            },
+        }
+    elif json_mode:
         extra["response_format"] = {"type": "json_object"}
 
     t0 = time.perf_counter()
@@ -136,8 +150,12 @@ def run_build(
         skeleton_system, skeleton_user = build_skeleton_prompts(
             request, class_name=class_name, ancestry_name=ancestry_name, level=character_level,
         )
+        skeleton_schema = build_skeleton_schema()
         t0 = time.time()
-        skeleton_raw, skeleton_time = _call_ollama(model, skeleton_user, skeleton_system, 0.7, True)
+        skeleton_raw, skeleton_time = _call_ollama(
+            model, skeleton_user, skeleton_system, 0.7,
+            response_schema=skeleton_schema, max_tokens=512,
+        )
         timings["skeleton"] = skeleton_time
 
         try:
@@ -189,19 +207,33 @@ def run_build(
     if verbose:
         print(f"[pipeline] Found {len(options.slot_options)} feat slots, {total_opts} total options")
 
-    # Step 3: Build prompt
+    # Step 3: Build prompt + schema (schema cached for repair reuse)
     t0 = time.time()
     system_prompt = build_system_prompt()
     generation_prompt = build_generation_prompt(request, options, output_format)
+    response_schema = build_response_schema(options) if json_mode else None
     timings["prompt_build"] = round(time.time() - t0, 2)
 
     if verbose:
         print(f"[pipeline] Prompt: {len(generation_prompt)} chars")
+        if response_schema:
+            enum_slots = sum(
+                1 for lvl in response_schema.get("properties", {}).get("levels", {}).get("properties", {}).values()
+                for prop in lvl.get("properties", {}).values()
+                if "enum" in prop
+            )
+            print(f"[pipeline] Schema: {enum_slots} enum-constrained feat slots")
 
-    # Step 4: Generate
+    # Step 4: Generate (lower temperature with schema enforcement)
+    gen_temp = 0.5 if response_schema else temperature
+    # Thinking models (qwen3, deepseek-r1) use hidden tokens — need higher budget
+    gen_max_tokens = 4096 if provider_key in THINKING_MODELS else 2048
     if verbose:
-        print(f"[pipeline] Generating with {model} (temperature={temperature})...")
-    raw_output, gen_time = _call_ollama(model, generation_prompt, system_prompt, temperature, json_mode)
+        print(f"[pipeline] Generating with {model} (temperature={gen_temp}, schema={'ON' if response_schema else 'OFF'})...")
+    raw_output, gen_time = _call_ollama(
+        model, generation_prompt, system_prompt, gen_temp,
+        response_schema=response_schema, max_tokens=gen_max_tokens,
+    )
     timings["generate"] = gen_time
 
     if verbose:
@@ -276,8 +308,10 @@ def run_build(
         repair_input = f"{current_output}\n\n---\n\n{repair_prompt}"
 
         t0 = time.time()
+        repair_max = 2048 if provider_key in THINKING_MODELS else 1024
         current_output, repair_time = _call_ollama(
-            model, repair_input, system_prompt, repair_temperature, json_mode,
+            model, repair_input, system_prompt, repair_temperature,
+            response_schema=response_schema, max_tokens=repair_max,
         )
         timings[f"repair_{i + 1}"] = repair_time
         attempts += 1

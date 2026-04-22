@@ -172,6 +172,98 @@ def build_skeleton_prompts(
     return _SKELETON_SYSTEM_PROMPT, user_prompt
 
 
+def build_skeleton_schema() -> dict:
+    """Build JSON schema for the skeleton pass with class/ancestry/background enums."""
+    return {
+        "type": "object",
+        "properties": {
+            "class": {"type": "string", "enum": list_available_classes()},
+            "ancestry": {"type": "string", "enum": list_available_ancestries()},
+            "heritage": {"type": "string"},
+            "background": {"type": "string", "enum": list_backgrounds()},
+            "level": {"type": "integer"},
+            "reasoning": {"type": "string"},
+        },
+        "required": ["class", "ancestry", "heritage", "background", "level", "reasoning"],
+    }
+
+
+def build_response_schema(options: BuildOptions) -> dict:
+    """Build JSON schema with enum constraints for all feat slots.
+
+    Heritage and background are also enum-constrained.
+    Each feat slot is a string enum of valid feat names.
+    """
+    # Heritage enum (depends on ancestry)
+    heritage_prop = {"type": "string"}
+    if options.spec.ancestry_name:
+        heritages = list_heritages(options.spec.ancestry_name)
+        if heritages:
+            heritage_prop = {"type": "string", "enum": heritages}
+
+    # Background enum
+    backgrounds = list_backgrounds()
+    background_prop = {"type": "string", "enum": backgrounds} if backgrounds else {"type": "string"}
+
+    # Ability scores
+    ability_props = {a: {"type": "integer"} for a in ["str", "dex", "con", "int", "wis", "cha"]}
+
+    # Skills
+    skills_prop = {
+        "type": "object",
+        "additionalProperties": {
+            "type": "string",
+            "enum": ["trained", "expert", "master", "legendary"],
+        },
+    }
+
+    # Build per-level feat slot properties with enums
+    slots_by_level: dict[int, list[SlotOptions]] = {}
+    for so in options.slot_options:
+        slots_by_level.setdefault(so.slot.level, []).append(so)
+
+    level_props = {}
+    for level in sorted(slots_by_level):
+        slot_props = {}
+        slot_required = []
+        for so in slots_by_level[level]:
+            key = f"{so.slot.slot_type}_feat"
+            feat_names = sorted(set(o.name for o in so.options))
+            slot_props[key] = {"type": "string", "enum": feat_names}
+            slot_required.append(key)
+        level_props[str(level)] = {
+            "type": "object",
+            "properties": slot_props,
+            "required": slot_required,
+        }
+
+    return {
+        "type": "object",
+        "properties": {
+            "class": {"type": "string"},
+            "ancestry": {"type": "string"},
+            "heritage": heritage_prop,
+            "background": background_prop,
+            "level": {"type": "integer"},
+            "ability_scores": {
+                "type": "object",
+                "properties": ability_props,
+                "required": list(ability_props.keys()),
+            },
+            "skills": skills_prop,
+            "levels": {
+                "type": "object",
+                "properties": level_props,
+                "required": list(level_props.keys()),
+            },
+            "equipment": {"type": "array", "items": {"type": "string"}},
+            "notes": {"type": "string"},
+        },
+        "required": ["class", "ancestry", "heritage", "background", "level",
+                      "ability_scores", "skills", "levels", "equipment", "notes"],
+    }
+
+
 def build_system_prompt() -> str:
     return _SYSTEM_PROMPT
 
@@ -196,7 +288,8 @@ def build_generation_prompt(
 
     # Feat options per slot — all types now listed (skill feats pre-filtered by prereqs)
     parts.append("=== AVAILABLE FEAT OPTIONS ===")
-    parts.append("You MUST choose feats ONLY from these lists. Do NOT use any feat not listed here.")
+    parts.append("Your output is schema-constrained — you can ONLY pick feats from the valid lists below.")
+    parts.append("Focus on choosing feats that best match the character concept.")
     parts.append("")
 
     slots_by_level: dict[int, list] = {}
