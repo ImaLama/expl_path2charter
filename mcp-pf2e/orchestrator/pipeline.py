@@ -123,6 +123,7 @@ def run_build(
     temperature: float = 0.7,
     repair_temperature: float = 0.5,
     output_format: str = "json",
+    use_vector_ranking: bool = False,
     verbose: bool = True,
 ) -> dict:
     """Full build pipeline with optional two-pass mode.
@@ -217,10 +218,39 @@ def run_build(
     if verbose:
         print(f"[pipeline] Found {len(options.slot_options)} feat slots, {total_opts} total options")
 
+    # Step 2.5: Rank feats by concept relevance (optional, requires ChromaDB + mxbai)
+    ranked_feats = None
+    if use_vector_ranking:
+        try:
+            from query.feat_ranker import rank_feats_for_concept
+
+            if verbose:
+                print(f"[pipeline] Ranking feats by concept relevance via ChromaDB...")
+            t0_rank = time.time()
+            ranked_feats = rank_feats_for_concept(request, options)
+            timings["ranking"] = round(time.time() - t0_rank, 2)
+
+            ranked_count = sum(
+                len([r for r in v if r.get("show_description")])
+                for v in ranked_feats.values()
+            )
+            if verbose:
+                print(f"[pipeline] Ranked {len(ranked_feats)} slots, {ranked_count} feats with descriptions ({timings['ranking']}s)")
+
+            # Unload mxbai for large models that need full VRAM
+            if provider_key in LARGE_MODELS:
+                _unload_all_models()
+        except Exception:
+            import traceback
+            if verbose:
+                print(f"[pipeline] WARNING: Vector ranking failed, proceeding without ranking")
+                traceback.print_exc()
+            ranked_feats = None
+
     # Step 3: Build prompt + schema (schema cached for repair reuse)
     t0 = time.time()
     system_prompt = build_system_prompt()
-    generation_prompt = build_generation_prompt(request, options, output_format)
+    generation_prompt = build_generation_prompt(request, options, output_format, ranked_feats=ranked_feats)
     response_schema = build_response_schema(options) if json_mode else None
     timings["prompt_build"] = round(time.time() - t0, 2)
 
