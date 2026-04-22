@@ -275,6 +275,7 @@ def build_generation_prompt(
     request: str,
     options: BuildOptions,
     output_format: str = "json",
+    ranked_feats: dict[str, list[dict]] | None = None,
 ) -> str:
     """Build a prompt with decomposed feat options and output template.
 
@@ -282,6 +283,8 @@ def build_generation_prompt(
         request: Free-text build request or flavor text
         options: Decomposed build options from the decomposer
         output_format: "json" or "markdown"
+        ranked_feats: Optional ranked feats from vector DB. Dict keyed by
+            "{level}_{slot_type}" with list of {"name", "score", "description", "show_description"}.
     """
     parts = []
 
@@ -307,12 +310,29 @@ def build_generation_prompt(
         for so in slots_by_level[level]:
             slot_label = so.slot.slot_type.upper()
 
+            slot_key = f"{level}_{so.slot.slot_type}"
+
             if so.slot.slot_type == "skill":
                 if not skill_feats_printed:
                     _append_grouped_skill_feats(parts, so)
                     skill_feats_printed = True
                 else:
                     parts.append(f"  {slot_label} FEAT slot: pick from the skill feat list above (level {level} or lower)")
+            elif ranked_feats and slot_key in ranked_feats:
+                ranked = ranked_feats[slot_key]
+                featured = [r for r in ranked if r.get("show_description")]
+                rest = [r["name"] for r in ranked if not r.get("show_description")]
+                parts.append(f"  {slot_label} FEAT slot ({len(so.options)} options, top {len(featured)} recommended for this concept):")
+                opts_by_name = {o.name: o for o in so.options}
+                for r in featured:
+                    opt = opts_by_name.get(r["name"])
+                    lvl = opt.level if opt else "?"
+                    line = f"    ★ {r['name']} (lvl {lvl})"
+                    if r.get("description"):
+                        line += f" — {r['description']}"
+                    parts.append(line)
+                if rest:
+                    parts.append(f"    Other options: {', '.join(rest)}")
             elif len(so.options) > 30:
                 parts.append(f"  {slot_label} FEAT slot ({len(so.options)} options):")
                 names = [opt.name for opt in so.options]
