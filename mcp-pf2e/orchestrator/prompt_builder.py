@@ -1,9 +1,10 @@
 """Build prompts for PF2e character generation with decomposed feat options."""
 
+import copy
 import json
 
 from query.types import BuildOptions, SlotOptions
-from query.static_reader import list_available_classes, list_available_ancestries, list_heritages, list_backgrounds
+from query.static_reader import list_available_classes, list_available_ancestries, list_heritages, list_backgrounds, list_skill_feats_for_skills
 
 
 _SKELETON_SYSTEM_PROMPT = """\
@@ -383,3 +384,26 @@ def _build_markdown_level_sections(options: BuildOptions) -> str:
             lines.append(f"- {label} Feat: <name from {so.slot.slot_type} list>")
         sections.append("\n".join(lines))
     return "\n\n".join(sections)
+
+
+def narrow_skill_feat_enums(
+    schema: dict,
+    trained_skills: list[str],
+    character_level: int,
+) -> dict:
+    """Return a copy of the response schema with skill_feat enums narrowed.
+
+    Replaces the broad skill_feat enum at each level with only feats
+    whose 'trained in X' prerequisites are met by the given skills.
+    """
+    narrowed = copy.deepcopy(schema)
+    levels_props = narrowed.get("properties", {}).get("levels", {}).get("properties", {})
+    for level_str, level_schema in levels_props.items():
+        slot_props = level_schema.get("properties", {})
+        if "skill_feat" in slot_props and "enum" in slot_props["skill_feat"]:
+            level_num = int(level_str)
+            level_eligible = list_skill_feats_for_skills(trained_skills, level_num)
+            level_names = sorted(set(f.name for f in level_eligible))
+            if level_names:
+                slot_props["skill_feat"]["enum"] = level_names
+    return narrowed
