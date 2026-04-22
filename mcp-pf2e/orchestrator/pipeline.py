@@ -269,7 +269,13 @@ def _run_planned_generation(
             print(f"[pipeline] Plan after repair: {plan_validation.error_count} errors")
 
     # --- Extract required skills from planned feats ---
+    import re
     _RANK_ORDER = {"trained": 1, "expert": 2, "master": 3, "legendary": 4}
+    _STANDARD_SKILLS = {
+        "acrobatics", "arcana", "athletics", "crafting", "deception",
+        "diplomacy", "intimidation", "medicine", "nature", "occultism",
+        "performance", "religion", "society", "stealth", "survival", "thievery",
+    }
     required_skills: dict[str, str] = {}
     constraints = []
     for feat in plan_build.feats:
@@ -282,24 +288,29 @@ def _run_planned_generation(
             if not pval:
                 continue
             pval_lower = pval.lower()
-            # Parse "trained in Medicine", "expert in Athletics"
-            import re
             for rank in ["trained", "expert", "master", "legendary"]:
-                if f"{rank} in " in pval_lower:
-                    # Extract skill names after "in"
-                    match = re.search(rf"{rank} in (.+)", pval_lower)
-                    if match:
-                        skill_text = match.group(1).strip()
-                        # Handle "Arcana, Nature, Occultism, or Religion"
-                        skill_names = re.split(r"[,]| or | and ", skill_text)
-                        for sname in skill_names:
-                            sname = sname.strip().rstrip(".")
-                            if sname and len(sname) > 2:
-                                current = required_skills.get(sname, "")
-                                if not current or _RANK_ORDER.get(rank, 0) > _RANK_ORDER.get(current, 0):
-                                    required_skills[sname] = rank
+                if f"{rank} in " not in pval_lower:
+                    continue
+                match = re.search(rf"{rank} in (.+)", pval_lower)
+                if not match:
                     break
-            # Collect non-skill constraints (ability scores etc)
+                skill_text = match.group(1).strip()
+                is_or = " or " in skill_text or ("," in skill_text and " and " not in skill_text)
+
+                if is_or:
+                    # "or" prereqs: need at least one, pass as text constraint
+                    constraints.append(f"{feat.name} requires {rank} in at least one of: {skill_text}")
+                else:
+                    # "and" prereqs or single skill: enforce all in schema
+                    skill_names = re.split(r"[,]| and ", skill_text)
+                    for sname in skill_names:
+                        sname = sname.strip().rstrip(".")
+                        if sname in _STANDARD_SKILLS:
+                            current = required_skills.get(sname, "")
+                            if not current or _RANK_ORDER.get(rank, 0) > _RANK_ORDER.get(current, 0):
+                                required_skills[sname] = rank
+                break
+            # Collect ability score constraints
             if any(a in pval_lower for a in ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]):
                 constraints.append(f"{feat.name} requires: {pval}")
 
@@ -347,15 +358,26 @@ def _run_planned_generation(
     if verbose:
         print(f"[pipeline] Validation: {validation.error_count} errors, {len(validation.warnings)} warnings")
 
-    # --- One repair attempt if needed ---
+    # --- Repair loop (up to 2 attempts for guided builds) ---
     attempts = 1
-    if not validation.is_valid:
+    repair_history = []
+    for repair_i in range(2):
+        if validation.is_valid:
+            break
         if verbose:
-            print(f"[pipeline] Repair attempt (guided)...")
+            print(f"[pipeline] Guided repair {repair_i + 1}/2...")
             for e in validation.errors:
                 print(f"  ERROR: {e.message}")
 
-        repair_prompt = format_repair_prompt(validation, request)
+        repair_history.append({
+            "attempt": attempts,
+            "errors": [
+                {"rule": e.rule, "message": e.message, "feat_name": e.feat_name}
+                for e in validation.errors
+            ],
+        })
+
+        repair_prompt = format_repair_prompt(validation, request, history=repair_history)
         repair_input = f"{raw_output}\n\n---\n\n{repair_prompt}"
         repair_max = 2048 if provider_key in THINKING_MODELS else 1024
 
@@ -363,7 +385,7 @@ def _run_planned_generation(
             model, repair_input, build_system_prompt(), repair_temperature,
             response_schema=guided_schema, max_tokens=repair_max,
         )
-        timings["repair_1"] = repair_time
+        timings[f"repair_{repair_i + 1}"] = repair_time
         all_usages.append(repair_usage)
         attempts += 1
 
@@ -377,6 +399,9 @@ def _run_planned_generation(
             )
         except json.JSONDecodeError:
             pass
+
+        if verbose:
+            print(f"[pipeline] Post-repair: {validation.error_count} errors")
 
         if verbose:
             print(f"[pipeline] Post-repair: {validation.error_count} errors")
