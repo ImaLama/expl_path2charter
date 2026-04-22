@@ -16,7 +16,8 @@ SUITE_PATH = Path(__file__).parent / "suite.json"
 RESULTS_PATH = Path(__file__).parent / "results.jsonl"
 
 SUPPORTED_CONFIG_KEYS = {
-    "id", "model", "judge_model", "schema_enforced", "temperature", "max_repairs", "notes",
+    "id", "model", "judge_model", "schema_enforced", "temperature", "max_repairs",
+    "use_vector_ranking", "notes",
 }
 
 
@@ -72,6 +73,7 @@ def run_case(case: dict, config: dict, unsupported: list[str]) -> dict:
         max_repairs=config.get("max_repairs", 2),
         temperature=config.get("temperature", 0.7),
         output_format=output_format,
+        use_vector_ranking=config.get("use_vector_ranking", False),
         verbose=True,
     )
 

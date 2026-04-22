@@ -144,6 +144,16 @@
       "notes": "Mistral-Small 3.2 24B, judged by Qwen3 (cross-judge)"
     },
     {
+      "id": "mistral-with-ranking",
+      "model": "ollama-mistral-small",
+      "judge_model": "qwen3:32b",
+      "schema_enforced": true,
+      "temperature": 0.5,
+      "max_repairs": 2,
+      "use_vector_ranking": true,
+      "notes": "Mistral-Small + vector DB feat ranking"
+    },
+    {
       "id": "qwen3-with-ranking",
       "model": "ollama-qwen3-32b",
       "judge_model": "mistral-small3.2:24b",
