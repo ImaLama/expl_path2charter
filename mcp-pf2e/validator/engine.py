@@ -26,36 +26,27 @@ from .rules import (
     check_archetype_rules,
 )
 
-try:
-    from server.db import PF2eDB
-except ImportError:
-    PF2eDB = None
-
 
 class BuildValidator:
     """Orchestrates all validation rules for a PF2e character build."""
-
-    def __init__(self, db: "PF2eDB | None" = None, skip_semantic: bool = False):
-        self._db = db
-        self._skip_semantic = skip_semantic
 
     def _run_rules(self, build: ParsedBuild) -> ValidationResult:
         """Run all validation rules against a parsed build."""
         all_errors = []
         all_errors.extend(check_duplicate_feats(build))
-        all_errors.extend(check_feat_existence(build, self._db, skip_semantic=self._skip_semantic))
-        all_errors.extend(check_level_legality(build, self._db))
+        all_errors.extend(check_feat_existence(build))
+        all_errors.extend(check_level_legality(build))
         all_errors.extend(check_slot_counts(build))
-        all_errors.extend(check_feat_slot_type(build, self._db))
-        all_errors.extend(check_class_feat_access(build, self._db))
-        all_errors.extend(check_ancestry_feat_access(build, self._db))
+        all_errors.extend(check_feat_slot_type(build))
+        all_errors.extend(check_class_feat_access(build))
+        all_errors.extend(check_ancestry_feat_access(build))
         all_errors.extend(check_heritage(build))
         all_errors.extend(check_background(build))
         all_errors.extend(check_skill_ranks(build))
         all_errors.extend(check_skill_counts(build))
         all_errors.extend(check_ability_scores(build))
-        all_errors.extend(check_prerequisites(build, self._db))
-        all_errors.extend(check_archetype_rules(build, self._db))
+        all_errors.extend(check_prerequisites(build))
+        all_errors.extend(check_archetype_rules(build))
 
         errors = [e for e in all_errors if e.severity == "error"]
         warnings = [e for e in all_errors if e.severity == "warning"]
