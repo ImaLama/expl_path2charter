@@ -88,6 +88,28 @@
       "dedications": ["champion", "medic"],
       "expect_themes": ["divine", "healing", "esoterica", "protection"],
       "difficulty": "hard"
+    },
+    {
+      "id": "fire-caster-lvl12",
+      "label": "Sturdy fire caster with dedication",
+      "request": "A combat loving caster of uncertain origin that favors causing fire damage to multiple opponents if possible. Should be sturdier than a common wizard. Has at least one dedication.",
+      "class": null,
+      "ancestry": null,
+      "level": 12,
+      "dedications": null,
+      "expect_themes": ["fire", "AoE damage", "durability", "multiclass"],
+      "difficulty": "hard"
+    },
+    {
+      "id": "frontline-controller-lvl14",
+      "label": "Sturdy frontline battlefield controller",
+      "request": "A sturdy combat ready character that can hold the fort and assist allies as well as control the battlefield.",
+      "class": null,
+      "ancestry": null,
+      "level": 14,
+      "dedications": null,
+      "expect_themes": ["tanky", "support", "battlefield control", "frontline"],
+      "difficulty": "hard"
     }
   ],
   "run_configs": [
