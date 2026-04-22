@@ -20,7 +20,9 @@ from validator.repair import format_repair_prompt
 from orchestrator.prompt_builder import (
     build_system_prompt, build_generation_prompt, build_skeleton_prompts,
     build_skeleton_schema, build_response_schema,
+    narrow_skill_feat_enums,
 )
+from query.static_reader import group_skill_feats_by_skill
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 OLLAMA_OPENAI_URL = f"{OLLAMA_BASE_URL}/v1"
@@ -303,14 +305,39 @@ def run_build(
             ],
         })
 
-        repair_prompt = format_repair_prompt(validation, request, history=repair_history)
+        # Extract trained skills from current build for narrowed repair
+        repair_schema = response_schema
+        valid_skill_feats = None
+        try:
+            current_build = json.loads(current_output)
+            skills = current_build.get("skills", {})
+            trained_skills = [
+                skill for skill, rank in skills.items()
+                if rank.lower() in ("trained", "expert", "master", "legendary")
+            ]
+            if trained_skills and response_schema:
+                repair_schema = narrow_skill_feat_enums(
+                    response_schema, trained_skills, character_level,
+                )
+                grouped = group_skill_feats_by_skill(trained_skills, character_level)
+                valid_skill_feats = {k: [f.name for f in v] for k, v in grouped.items()}
+                if verbose:
+                    total_narrowed = sum(len(v) for v in valid_skill_feats.values())
+                    print(f"[pipeline] Narrowed skill feats to {total_narrowed} options for {len(trained_skills)} trained skills")
+        except (json.JSONDecodeError, AttributeError):
+            pass
+
+        repair_prompt = format_repair_prompt(
+            validation, request, history=repair_history,
+            valid_skill_feats=valid_skill_feats,
+        )
         repair_input = f"{current_output}\n\n---\n\n{repair_prompt}"
 
         t0 = time.time()
         repair_max = 2048 if provider_key in THINKING_MODELS else 1024
         current_output, repair_time, repair_usage = _call_ollama(
             model, repair_input, system_prompt, repair_temperature,
-            response_schema=response_schema, max_tokens=repair_max,
+            response_schema=repair_schema, max_tokens=repair_max,
         )
         timings[f"repair_{i + 1}"] = repair_time
         all_usages.append(repair_usage)
