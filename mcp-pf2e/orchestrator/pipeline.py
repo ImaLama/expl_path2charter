@@ -265,7 +265,10 @@ def run_build(
                 expected_ancestry=ancestry_name,
                 expected_level=character_level,
             )
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as exc:
+            if verbose:
+                print(f"[pipeline] WARNING: JSON parse failed ({exc}), falling back to text parsing")
+                print(f"[pipeline] Raw output ({len(raw_output)} chars): {raw_output[:200]}...")
             validation = validator.validate(
                 raw_output,
                 expected_class=class_name,
@@ -347,6 +350,8 @@ def run_build(
 
         if verbose:
             print(f"[pipeline] Repair generated {len(current_output)} chars in {repair_time}s")
+            if len(current_output) == 0:
+                print(f"[pipeline] WARNING: Empty repair output — likely token budget exhaustion (thinking consumed all {repair_max} tokens)")
 
         t0v = time.time()
         if json_mode:
@@ -358,7 +363,10 @@ def run_build(
                     expected_ancestry=ancestry_name,
                     expected_level=character_level,
                 )
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as exc:
+                if verbose:
+                    print(f"[pipeline] WARNING: Repair JSON parse failed ({exc}), falling back to text parsing")
+                    print(f"[pipeline] Raw repair output ({len(current_output)} chars): {current_output[:200]}...")
                 validation = validator.validate(
                     current_output,
                     expected_class=class_name,
