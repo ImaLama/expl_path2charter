@@ -152,8 +152,8 @@ def run_build(
         print(f"[pipeline] Unloading models to free VRAM...")
     _unload_all_models()
 
-    # Step 1.5: Skeleton pass if class/level not fully specified
-    if not class_name or not character_level:
+    # Step 1.5: Skeleton pass if class/level/ancestry not fully specified
+    if not class_name or not character_level or not ancestry_name:
         if verbose:
             print(f"[pipeline] Pass 1: Generating build skeleton from concept...")
         skeleton_system, skeleton_user = build_skeleton_prompts(
@@ -321,11 +321,13 @@ def run_build(
             ],
         })
 
-        # Extract trained skills from current build for narrowed repair
+        # Extract build state for narrowed repair schema
         repair_schema = response_schema
         valid_skill_feats = None
         try:
             current_build = json.loads(current_output)
+
+            # Narrow skill feat enums based on actual trained skills
             skills = current_build.get("skills", {})
             trained_skills = [
                 skill for skill, rank in skills.items()
@@ -340,6 +342,43 @@ def run_build(
                 if verbose:
                     total_narrowed = sum(len(v) for v in valid_skill_feats.values())
                     print(f"[pipeline] Narrowed skill feats to {total_narrowed} options for {len(trained_skills)} trained skills")
+
+            # Remove duplicate feats from repair schema
+            # Find feats taken more than once, keep first occurrence, remove from later slots
+            import copy
+            levels_data = current_build.get("levels", {})
+            feat_first_seen: dict[str, str] = {}  # feat_name_lower → first level_str
+            duplicates_to_remove: dict[str, set] = {}  # level_str → {feat names to remove}
+            for level_str in sorted(levels_data, key=lambda x: int(x)):
+                slots = levels_data[level_str]
+                if not isinstance(slots, dict):
+                    continue
+                for slot_key, feat_name in slots.items():
+                    if not feat_name:
+                        continue
+                    name_lower = feat_name.lower()
+                    if name_lower in feat_first_seen:
+                        duplicates_to_remove.setdefault(level_str, set()).add(feat_name)
+                    else:
+                        feat_first_seen[name_lower] = level_str
+
+            if duplicates_to_remove:
+                if repair_schema is response_schema:
+                    repair_schema = copy.deepcopy(response_schema)
+                levels_props = repair_schema.get("properties", {}).get("levels", {}).get("properties", {})
+                removed_count = 0
+                for level_str, feats_to_remove in duplicates_to_remove.items():
+                    level_schema = levels_props.get(level_str, {})
+                    for slot_key, slot_schema in level_schema.get("properties", {}).items():
+                        if "enum" in slot_schema:
+                            original_len = len(slot_schema["enum"])
+                            slot_schema["enum"] = [f for f in slot_schema["enum"] if f not in feats_to_remove]
+                            removed_count += original_len - len(slot_schema["enum"])
+                if verbose and removed_count:
+                    all_dupes = set()
+                    for feats in duplicates_to_remove.values():
+                        all_dupes.update(feats)
+                    print(f"[pipeline] Removed {len(all_dupes)} duplicate feat(s) from repair enums: {', '.join(sorted(all_dupes))}")
         except (json.JSONDecodeError, AttributeError):
             pass
 

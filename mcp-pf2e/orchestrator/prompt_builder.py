@@ -49,6 +49,8 @@ CRITICAL RULES:
 - ONLY use feats, spells, and features from the provided option lists.
 - Do NOT invent or fabricate any game content.
 - Each feat slot must be filled with exactly one feat from the corresponding list.
+- Each feat can only be taken ONCE across all levels unless explicitly marked as repeatable (e.g., "Additional Lore", "Assurance"). Never select the same feat for multiple level slots.
+- Dedication feats (archetypes) follow special rules: you must take at least 2 non-dedication feats from an archetype before taking a second Dedication feat.
 - Feat prerequisites must be satisfied (a feat requiring another feat means that feat was taken at an earlier level).
 - Ability scores use the standard boost system: 4 free boosts at level 1, plus ancestry/background/class boosts.
 - Ability scores must be RAW SCORES (e.g., 10, 12, 14, 16, 18), NOT modifiers. A boost raises a score by 2 (e.g., 10 → 12). Starting base is 10 for all abilities.

@@ -84,7 +84,7 @@ def evaluate_build(
         temperature=0.2,
         json_mode=False,
         response_schema=EVAL_SCHEMA,
-        max_tokens=512,
+        max_tokens=1024,
     )
 
     try:
