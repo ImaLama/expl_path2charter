@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from query.decomposer import get_build_options
 from query.types import BuildOptions
+from query.static_reader import get_feat_data, group_skill_feats_by_skill
 from validator.engine import BuildValidator
 from validator.repair import format_repair_prompt
 from orchestrator.prompt_builder import (
@@ -22,7 +23,6 @@ from orchestrator.prompt_builder import (
     build_skeleton_schema, build_response_schema,
     narrow_skill_feat_enums,
 )
-from query.static_reader import group_skill_feats_by_skill
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 OLLAMA_OPENAI_URL = f"{OLLAMA_BASE_URL}/v1"
@@ -118,7 +118,7 @@ def run_build(
     ancestry_name: str = "",
     dedications: list[str] | None = None,
     request: str = "",
-    provider_key: str = "ollama-qwen3-32b",
+    provider_key: str = "ollama-mistral-small",
     max_repairs: int = 2,
     temperature: float = 0.7,
     repair_temperature: float = 0.5,
@@ -164,7 +164,8 @@ def run_build(
         t0 = time.time()
         skeleton_raw, skeleton_time, skeleton_usage = _call_ollama(
             model, skeleton_user, skeleton_system, 0.7,
-            response_schema=skeleton_schema, max_tokens=512,
+            response_schema=skeleton_schema,
+            max_tokens=1024 if provider_key in THINKING_MODELS else 512,
         )
         timings["skeleton"] = skeleton_time
         all_usages.append(skeleton_usage)
@@ -373,12 +374,12 @@ def run_build(
                     total_narrowed = sum(len(v) for v in valid_skill_feats.values())
                     print(f"[pipeline] Narrowed skill feats to {total_narrowed} options for {len(trained_skills)} trained skills")
 
-            # Remove duplicate feats from repair schema
-            # Find feats taken more than once, keep first occurrence, remove from later slots
+            # Remove duplicate feats from ALL levels after first occurrence
             import copy
+            _REPEATABLE = {"additional lore", "assurance", "skill training"}
             levels_data = current_build.get("levels", {})
-            feat_first_seen: dict[str, str] = {}  # feat_name_lower → first level_str
-            duplicates_to_remove: dict[str, set] = {}  # level_str → {feat names to remove}
+            feat_first_level: dict[str, int] = {}
+            duplicate_names: set[str] = set()
             for level_str in sorted(levels_data, key=lambda x: int(x)):
                 slots = levels_data[level_str]
                 if not isinstance(slots, dict):
@@ -387,28 +388,62 @@ def run_build(
                     if not feat_name:
                         continue
                     name_lower = feat_name.lower()
-                    if name_lower in feat_first_seen:
-                        duplicates_to_remove.setdefault(level_str, set()).add(feat_name)
+                    if name_lower in _REPEATABLE:
+                        continue
+                    if name_lower in feat_first_level:
+                        duplicate_names.add(feat_name)
                     else:
-                        feat_first_seen[name_lower] = level_str
+                        feat_first_level[name_lower] = int(level_str)
 
-            if duplicates_to_remove:
+            if duplicate_names:
                 if repair_schema is response_schema:
                     repair_schema = copy.deepcopy(response_schema)
                 levels_props = repair_schema.get("properties", {}).get("levels", {}).get("properties", {})
                 removed_count = 0
-                for level_str, feats_to_remove in duplicates_to_remove.items():
-                    level_schema = levels_props.get(level_str, {})
-                    for slot_key, slot_schema in level_schema.get("properties", {}).items():
-                        if "enum" in slot_schema:
-                            original_len = len(slot_schema["enum"])
-                            slot_schema["enum"] = [f for f in slot_schema["enum"] if f not in feats_to_remove]
-                            removed_count += original_len - len(slot_schema["enum"])
+                for level_str, level_schema in levels_props.items():
+                    lvl = int(level_str)
+                    for dupe in duplicate_names:
+                        first_lvl = feat_first_level.get(dupe.lower(), 0)
+                        if lvl <= first_lvl:
+                            continue
+                        for slot_schema in level_schema.get("properties", {}).values():
+                            if "enum" in slot_schema and dupe in slot_schema["enum"]:
+                                slot_schema["enum"].remove(dupe)
+                                removed_count += 1
                 if verbose and removed_count:
-                    all_dupes = set()
-                    for feats in duplicates_to_remove.values():
-                        all_dupes.update(feats)
-                    print(f"[pipeline] Removed {len(all_dupes)} duplicate feat(s) from repair enums: {', '.join(sorted(all_dupes))}")
+                    print(f"[pipeline] Removed {len(duplicate_names)} duplicate feat(s) from ALL later level enums: {', '.join(sorted(duplicate_names))}")
+
+            # Dedication-aware repair: remove invalid second dedication from enums
+            dedications_in_build = []
+            archetype_feat_count = 0
+            for level_str in sorted(levels_data, key=lambda x: int(x)):
+                slots = levels_data[level_str]
+                if not isinstance(slots, dict):
+                    continue
+                for slot_key, feat_name in slots.items():
+                    if not feat_name:
+                        continue
+                    entry = get_feat_data(feat_name)
+                    if not entry:
+                        continue
+                    traits = entry.get("system", {}).get("traits", {}).get("value", [])
+                    traits_lower = [t.lower() for t in traits]
+                    if "dedication" in traits_lower:
+                        dedications_in_build.append({"name": feat_name, "level": int(level_str)})
+                    elif "archetype" in traits_lower:
+                        archetype_feat_count += 1
+
+            if len(dedications_in_build) >= 2 and archetype_feat_count < 2:
+                second_ded = dedications_in_build[1]
+                if repair_schema is response_schema:
+                    repair_schema = copy.deepcopy(response_schema)
+                levels_props = repair_schema.get("properties", {}).get("levels", {}).get("properties", {})
+                for level_str, level_schema in levels_props.items():
+                    for slot_schema in level_schema.get("properties", {}).values():
+                        if "enum" in slot_schema and second_ded["name"] in slot_schema["enum"]:
+                            slot_schema["enum"].remove(second_ded["name"])
+                if verbose:
+                    print(f"[pipeline] Removed invalid 2nd dedication '{second_ded['name']}' from all repair enums (need 2 archetype feats from {dedications_in_build[0]['name']} first)")
         except (json.JSONDecodeError, AttributeError):
             pass
 

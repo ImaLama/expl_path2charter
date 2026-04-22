@@ -31,7 +31,7 @@ Examples:
     parser.add_argument("--level", type=int, default=0, help="Character level (1-20). Optional — LLM chooses if omitted.")
     parser.add_argument("--ancestry", default="", help="Character ancestry (e.g., goblin, elf)")
     parser.add_argument("--dedications", nargs="*", default=[], help="Archetype dedications (e.g., champion exemplar)")
-    parser.add_argument("--model", default="ollama-qwen3-32b", choices=list(LOCAL_MODELS.keys()), help="Ollama model (default: ollama-qwen3-32b)")
+    parser.add_argument("--model", default="ollama-mistral-small", choices=list(LOCAL_MODELS.keys()), help="Ollama model (default: ollama-mistral-small)")
     parser.add_argument("--max-repairs", type=int, default=2, help="Max repair iterations (default: 2)")
     parser.add_argument("--format", dest="output_format", choices=["json", "markdown"], default="json", help="Output format (default: json)")
     parser.add_argument("--output", help="Save result to directory")
