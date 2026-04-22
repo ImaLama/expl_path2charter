@@ -34,6 +34,7 @@ LOCAL_MODELS = {
     "ollama-deepseek32b": "deepseek-r1:32b",
     "ollama-llama70b": "llama3.1:70b-instruct-q4_K_M",
     "ollama-nemo": "mistral-nemo:12b-instruct",
+    "ollama-mistral-small": "mistral-small3.2:24b",
 }
 
 LARGE_MODELS = {"ollama-qwen3-32b", "ollama-qwen32b", "ollama-qwen25-coder", "ollama-deepseek32b", "ollama-llama70b"}
