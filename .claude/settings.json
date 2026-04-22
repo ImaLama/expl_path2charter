@@ -48,5 +48,8 @@
       "Bash(curl:*| bash:*)",
       "Bash(wget:*| bash:*)"
     ]
+  },
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true
   }
 }
