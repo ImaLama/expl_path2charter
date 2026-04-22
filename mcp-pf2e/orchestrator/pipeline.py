@@ -12,7 +12,6 @@ import httpx
 from openai import OpenAI
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "llm-eval"))
 
 from query.decomposer import get_build_options
 from query.types import BuildOptions

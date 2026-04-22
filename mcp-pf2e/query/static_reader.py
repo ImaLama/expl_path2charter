@@ -334,6 +334,7 @@ def get_ancestry_data(ancestry_name: str) -> dict | None:
         return None
 
 
+@lru_cache(maxsize=64)
 def get_background_data(background_name: str) -> dict | None:
     """Load a background JSON by name (fuzzy match against available backgrounds)."""
     bg_dir = _STATIC_ROOT / "backgrounds"

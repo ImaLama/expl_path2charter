@@ -41,18 +41,16 @@ def decompose_build(spec: BuildSpec) -> BuildOptions:
 
     # Pre-fetch archetype feats if dedications are specified
     archetype_feats_by_max_level: dict[int, list] = {}
-    for dedication in spec.dedications:
+    if spec.dedications:
         for lvl in slot_levels["class"]:
-            if lvl <= spec.character_level and lvl not in archetype_feats_by_max_level:
+            if lvl <= spec.character_level:
                 archetype_feats_by_max_level[lvl] = []
         for dedication_name in spec.dedications:
             for lvl in archetype_feats_by_max_level:
                 feats = list_archetype_feats(dedication_name, lvl)
-                archetype_feats_by_max_level.setdefault(lvl, [])
                 for f in feats:
                     if f not in archetype_feats_by_max_level[lvl]:
                         archetype_feats_by_max_level[lvl].append(f)
-        break  # Only need one pass through the outer loop
 
     # Class feat slots — include class feats + all dedications + specified archetype feats
     for lvl in slot_levels["class"]:

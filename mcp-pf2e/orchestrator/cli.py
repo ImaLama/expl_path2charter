@@ -36,7 +36,6 @@ Examples:
     parser.add_argument("--format", dest="output_format", choices=["json", "markdown"], default="json", help="Output format (default: json)")
     parser.add_argument("--output", help="Save result to directory")
     parser.add_argument("--request", default="", help="Optional free-text flavor for the prompt")
-    parser.add_argument("--skip-semantic", action="store_true", default=None, help="Skip embedding search in validation (default: auto based on model size)")
     parser.add_argument("--quiet", action="store_true", help="Suppress step-by-step output")
 
     args = parser.parse_args()
@@ -53,7 +52,6 @@ Examples:
         provider_key=args.model,
         max_repairs=args.max_repairs,
         output_format=args.output_format,
-        skip_semantic=args.skip_semantic,
         verbose=not args.quiet,
     )
 

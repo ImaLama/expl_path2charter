@@ -77,6 +77,17 @@
       "dedications": ["medic"],
       "expect_themes": ["crafting", "healing", "innovation"],
       "difficulty": "hard"
+    },
+    {
+      "id": "dual-dedication",
+      "label": "Dual archetype dedication (regression)",
+      "request": "A goblin thaumaturge who blends divine champion protection with battlefield medicine",
+      "class": "thaumaturge",
+      "ancestry": "goblin",
+      "level": 8,
+      "dedications": ["champion", "medic"],
+      "expect_themes": ["divine", "healing", "esoterica", "protection"],
+      "difficulty": "hard"
     }
   ],
   "run_configs": [
