@@ -7,6 +7,7 @@ def format_repair_prompt(
     result: ValidationResult,
     original_prompt: str = "",
     history: list[dict] | None = None,
+    valid_skill_feats: dict[str, list[str]] | None = None,
 ) -> str:
     """Format validation errors into a repair prompt with cumulative history.
 
@@ -15,6 +16,8 @@ def format_repair_prompt(
         original_prompt: The original build request
         history: List of previous attempts, each with:
             {"attempt": N, "errors": [{"rule": ..., "message": ..., "feat_name": ...}]}
+        valid_skill_feats: Optional dict of {skill_name: [feat_names]} for narrowed replacements.
+            When provided, appended as a "valid skill feats" section to guide repair.
     """
     if result.is_valid:
         return ""
@@ -56,6 +59,20 @@ def format_repair_prompt(
         lines.append("Warnings (non-blocking):")
         for w in result.warnings:
             lines.append(f"  - [{w.rule}] {w.message}")
+
+    # Valid skill feats section — guides repair toward actually eligible choices
+    if valid_skill_feats:
+        has_prereq_error = any(
+            e.rule == "prerequisite" for e in result.errors
+        )
+        if has_prereq_error:
+            lines.append("")
+            lines.append("=== VALID SKILL FEATS FOR YOUR TRAINED SKILLS ===")
+            lines.append("Pick skill feat replacements ONLY from this list:")
+            for skill_name in sorted(valid_skill_feats):
+                feat_names = valid_skill_feats[skill_name]
+                if feat_names:
+                    lines.append(f"  {skill_name}: {', '.join(sorted(feat_names))}")
 
     lines.append("")
     lines.append("Fix ONLY the errors listed above. Keep all other choices the same.")
