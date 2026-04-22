@@ -1,0 +1,114 @@
+{
+  "version": "1.0",
+  "cases": [
+    {
+      "id": "simple-fighter",
+      "label": "Basic melee fighter",
+      "request": "A straightforward melee fighter who hits hard",
+      "class": "fighter",
+      "ancestry": "human",
+      "level": 5,
+      "dedications": [],
+      "expect_themes": ["melee", "strength", "martial weapons"],
+      "difficulty": "easy"
+    },
+    {
+      "id": "thrown-fighter",
+      "label": "Thrown weapon fighter (regression)",
+      "request": "A fighter specializing in thrown weapons",
+      "class": "fighter",
+      "ancestry": "human",
+      "level": 3,
+      "dedications": [],
+      "expect_themes": ["thrown", "ranged", "javelin"],
+      "difficulty": "easy"
+    },
+    {
+      "id": "thaum-champion",
+      "label": "Thaumaturge with Champion dedication",
+      "request": "A goblin hustler who dabbles in divine protection",
+      "class": "thaumaturge",
+      "ancestry": "goblin",
+      "level": 4,
+      "dedications": ["champion"],
+      "expect_themes": ["divine", "protection", "esoterica"],
+      "difficulty": "medium"
+    },
+    {
+      "id": "sneaky-caster",
+      "label": "Concept-only: no class specified",
+      "request": "A character who casts spells up close while staying hidden",
+      "class": null,
+      "ancestry": null,
+      "level": null,
+      "dedications": null,
+      "expect_themes": ["stealth", "melee spells", "illusion"],
+      "difficulty": "hard"
+    },
+    {
+      "id": "wizard-illusionist",
+      "label": "Illusion-focused wizard",
+      "request": "Wizard with a spellbook favoring illusion magic",
+      "class": "wizard",
+      "ancestry": null,
+      "level": 7,
+      "dedications": [],
+      "expect_themes": ["illusion", "deception", "spellbook"],
+      "difficulty": "medium"
+    },
+    {
+      "id": "exemplar-thrown",
+      "label": "Exemplar thrown + defensive",
+      "request": "Exemplar favoring thrown weapons and defensive abilities",
+      "class": "exemplar",
+      "ancestry": null,
+      "level": 8,
+      "dedications": [],
+      "expect_themes": ["thrown", "defense", "ikon"],
+      "difficulty": "medium"
+    },
+    {
+      "id": "complex-multiclass",
+      "label": "Complex multiclass build",
+      "request": "A dwarven inventor who also practices medicine on the battlefield",
+      "class": "inventor",
+      "ancestry": "dwarf",
+      "level": 6,
+      "dedications": ["medic"],
+      "expect_themes": ["crafting", "healing", "innovation"],
+      "difficulty": "hard"
+    }
+  ],
+  "run_configs": [
+    {
+      "id": "qwen3-schema-on",
+      "model": "ollama-qwen3-32b",
+      "judge_model": "mistral-small3.2:24b",
+      "schema_enforced": true,
+      "temperature": 0.5,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "notes": "Qwen3 32B thinking model, schema enforced"
+    },
+    {
+      "id": "qwen25-schema-on",
+      "model": "ollama-qwen32b",
+      "judge_model": "mistral-small3.2:24b",
+      "schema_enforced": true,
+      "temperature": 0.5,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "notes": "Qwen2.5 32B non-thinking, schema enforced"
+    },
+    {
+      "id": "qwen3-with-ranking",
+      "model": "ollama-qwen3-32b",
+      "judge_model": "mistral-small3.2:24b",
+      "schema_enforced": true,
+      "temperature": 0.5,
+      "max_repairs": 2,
+      "use_vector_ranking": true,
+      "notes": "Qwen3 + vector DB feat ranking (future)"
+    }
+  ]
+}
