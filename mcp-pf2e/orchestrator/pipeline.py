@@ -64,8 +64,8 @@ def _call_ollama(
     json_mode: bool = True,
     response_schema: dict | None = None,
     max_tokens: int = 2048,
-) -> tuple[str, float]:
-    """Call Ollama via OpenAI-compatible API. Returns (content, elapsed_seconds)."""
+) -> tuple[str, float, dict]:
+    """Call Ollama via OpenAI-compatible API. Returns (content, elapsed_seconds, usage)."""
     client = OpenAI(base_url=OLLAMA_OPENAI_URL, api_key="ollama")
 
     messages = []
@@ -97,7 +97,14 @@ def _call_ollama(
     elapsed = time.perf_counter() - t0
 
     content = response.choices[0].message.content or ""
-    return content, round(elapsed, 2)
+    usage = {}
+    if response.usage:
+        usage = {
+            "prompt_tokens": response.usage.prompt_tokens,
+            "completion_tokens": response.usage.completion_tokens,
+            "total_tokens": response.usage.total_tokens,
+        }
+    return content, round(elapsed, 2), usage
 
 
 def run_build(
@@ -111,7 +118,6 @@ def run_build(
     temperature: float = 0.7,
     repair_temperature: float = 0.5,
     output_format: str = "json",
-    skip_semantic: bool | None = None,
     verbose: bool = True,
 ) -> dict:
     """Full build pipeline with optional two-pass mode.
@@ -122,15 +128,13 @@ def run_build(
     model = LOCAL_MODELS.get(provider_key, provider_key)
     json_mode = output_format == "json"
 
-    if skip_semantic is None:
-        skip_semantic = provider_key in LARGE_MODELS
-
     if not request and class_name:
         ded_str = f" with {', '.join(d.title() for d in (dedications or []))} Dedication" if dedications else ""
         anc_str = f"{ancestry_name.title()} " if ancestry_name else ""
         request = f"Level {character_level} {anc_str}{class_name.title()}{ded_str}"
 
     timings = {}
+    all_usages = []
     result = {
         "request": request,
         "provider": provider_key,
@@ -152,11 +156,12 @@ def run_build(
         )
         skeleton_schema = build_skeleton_schema()
         t0 = time.time()
-        skeleton_raw, skeleton_time = _call_ollama(
+        skeleton_raw, skeleton_time, skeleton_usage = _call_ollama(
             model, skeleton_user, skeleton_system, 0.7,
             response_schema=skeleton_schema, max_tokens=512,
         )
         timings["skeleton"] = skeleton_time
+        all_usages.append(skeleton_usage)
 
         try:
             skeleton = json.loads(skeleton_raw)
@@ -230,11 +235,12 @@ def run_build(
     gen_max_tokens = 4096 if provider_key in THINKING_MODELS else 2048
     if verbose:
         print(f"[pipeline] Generating with {model} (temperature={gen_temp}, schema={'ON' if response_schema else 'OFF'})...")
-    raw_output, gen_time = _call_ollama(
+    raw_output, gen_time, gen_usage = _call_ollama(
         model, generation_prompt, system_prompt, gen_temp,
         response_schema=response_schema, max_tokens=gen_max_tokens,
     )
     timings["generate"] = gen_time
+    all_usages.append(gen_usage)
 
     if verbose:
         print(f"[pipeline] Generated {len(raw_output)} chars in {gen_time}s")
@@ -244,13 +250,7 @@ def run_build(
         print(f"[pipeline] Validating...")
 
     t0 = time.time()
-    try:
-        from server.db import PF2eDB
-        db = PF2eDB()
-    except Exception:
-        db = None
-
-    validator = BuildValidator(db=db, skip_semantic=skip_semantic)
+    validator = BuildValidator()
     build_json = None
 
     if json_mode:
@@ -309,11 +309,12 @@ def run_build(
 
         t0 = time.time()
         repair_max = 2048 if provider_key in THINKING_MODELS else 1024
-        current_output, repair_time = _call_ollama(
+        current_output, repair_time, repair_usage = _call_ollama(
             model, repair_input, system_prompt, repair_temperature,
             response_schema=response_schema, max_tokens=repair_max,
         )
         timings[f"repair_{i + 1}"] = repair_time
+        all_usages.append(repair_usage)
         attempts += 1
 
         if verbose:
@@ -359,6 +360,12 @@ def run_build(
     }
     result["attempts"] = attempts
     result["timings"] = timings
+
+    token_totals = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    for u in all_usages:
+        for k in token_totals:
+            token_totals[k] += u.get(k, 0)
+    result["tokens"] = token_totals
 
     if verbose:
         status = "VALID" if validation.is_valid else f"INVALID ({validation.error_count} errors)"

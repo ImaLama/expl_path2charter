@@ -12,14 +12,8 @@ from .prerequisite import parse_prerequisites, check_prerequisite
 from query.static_reader import (
     get_class_data, get_feat_slot_levels,
     get_class_trained_skills, get_background_data, get_ancestry_data,
-    list_heritages, list_backgrounds, _fuzzy_match,
+    list_heritages, list_backgrounds, _fuzzy_match, get_feat_data,
 )
-
-# Optional: PF2eDB for database-backed feat verification
-try:
-    from server.db import PF2eDB
-except ImportError:
-    PF2eDB = None
 
 
 _REPEATABLE_FEATS = {"additional lore", "assurance", "skill training"}
@@ -44,23 +38,12 @@ def check_duplicate_feats(build: ParsedBuild) -> list[ValidationError]:
     return errors
 
 
-def check_feat_existence(
-    build: ParsedBuild,
-    db: "PF2eDB | None" = None,
-    skip_semantic: bool = False,
-) -> list[ValidationError]:
-    """Verify every named feat exists in the database.
-
-    get_entry() does exact name lookup (no embedding needed).
-    Semantic search fallback (needs mxbai loaded) is skipped when skip_semantic=True.
-    """
+def check_feat_existence(build: ParsedBuild) -> list[ValidationError]:
+    """Verify every named feat exists in the static data."""
     errors = []
 
-    if db is None:
-        return errors
-
     for feat in build.feats:
-        entry = db.get_entry(feat.name, content_type=None)
+        entry = get_feat_data(feat.name)
         if entry:
             rarity = entry.get("system", {}).get("traits", {}).get("rarity", "common")
             if rarity in ("uncommon", "rare", "unique"):
@@ -73,19 +56,6 @@ def check_feat_existence(
                 ))
             continue
 
-        if not skip_semantic:
-            results = db.search(query=feat.name, n_results=1)
-            if results and results[0]["relevance_score"] > 0.85:
-                suggestion = results[0]["name"]
-                errors.append(ValidationError(
-                    rule="feat_existence",
-                    severity="error",
-                    message=f'"{feat.name}" not found. Did you mean "{suggestion}"?',
-                    feat_name=feat.name,
-                    details={"suggestion": suggestion, "score": results[0]["relevance_score"]},
-                ))
-                continue
-
         errors.append(ValidationError(
             rule="feat_existence",
             severity="error",
@@ -96,18 +66,15 @@ def check_feat_existence(
     return errors
 
 
-def check_level_legality(
-    build: ParsedBuild,
-    db: "PF2eDB | None" = None,
-) -> list[ValidationError]:
+def check_level_legality(build: ParsedBuild) -> list[ValidationError]:
     """Each feat's level must be <= the character level at which it's taken."""
     errors = []
 
-    if db is None or build.character_level == 0:
+    if build.character_level == 0:
         return errors
 
     for feat in build.feats:
-        entry = db.get_entry(feat.name, content_type=None)
+        entry = get_feat_data(feat.name)
         if not entry:
             continue
 
@@ -196,15 +163,9 @@ _SLOT_TO_VALID_CATEGORIES = {
 }
 
 
-def check_feat_slot_type(
-    build: ParsedBuild,
-    db: "PF2eDB | None" = None,
-) -> list[ValidationError]:
+def check_feat_slot_type(build: ParsedBuild) -> list[ValidationError]:
     """Verify feats are in the correct slot type (skill feats in skill slots, etc.)."""
     errors = []
-
-    if db is None:
-        return errors
 
     for feat in build.feats:
         if not feat.slot_type or feat.slot_type == "archetype":
@@ -214,7 +175,7 @@ def check_feat_slot_type(
         if not valid_categories:
             continue
 
-        entry = db.get_entry(feat.name, content_type=None)
+        entry = get_feat_data(feat.name)
         if not entry:
             continue
 
@@ -238,14 +199,11 @@ def check_feat_slot_type(
     return errors
 
 
-def check_class_feat_access(
-    build: ParsedBuild,
-    db: "PF2eDB | None" = None,
-) -> list[ValidationError]:
+def check_class_feat_access(build: ParsedBuild) -> list[ValidationError]:
     """Class feats must have the character's class in their traits."""
     errors = []
 
-    if db is None or not build.class_name:
+    if not build.class_name:
         return errors
 
     class_slug = build.class_name.lower()
@@ -254,7 +212,7 @@ def check_class_feat_access(
         if feat.slot_type != "class":
             continue
 
-        entry = db.get_entry(feat.name, content_type=None)
+        entry = get_feat_data(feat.name)
         if not entry:
             continue
 
@@ -274,18 +232,12 @@ def check_class_feat_access(
     return errors
 
 
-def check_prerequisites(
-    build: ParsedBuild,
-    db: "PF2eDB | None" = None,
-) -> list[ValidationError]:
+def check_prerequisites(build: ParsedBuild) -> list[ValidationError]:
     """Check that each feat's prerequisites are satisfied."""
     errors = []
 
-    if db is None:
-        return errors
-
     for feat in build.feats:
-        entry = db.get_entry(feat.name, content_type=None)
+        entry = get_feat_data(feat.name)
         if not entry:
             continue
 
@@ -316,10 +268,7 @@ def check_prerequisites(
     return errors
 
 
-def check_archetype_rules(
-    build: ParsedBuild,
-    db: "PF2eDB | None" = None,
-) -> list[ValidationError]:
+def check_archetype_rules(build: ParsedBuild) -> list[ValidationError]:
     """Check PF2e archetype dedication rules.
 
     - Must take a dedication feat before any other archetype feats from that archetype
@@ -327,14 +276,11 @@ def check_archetype_rules(
     """
     errors = []
 
-    if db is None:
-        return errors
-
     dedications = []
     archetype_feats = []
 
     for feat in build.feats:
-        entry = db.get_entry(feat.name, content_type=None)
+        entry = get_feat_data(feat.name)
         if not entry:
             continue
         traits = entry.get("system", {}).get("traits", {}).get("value", [])
@@ -357,14 +303,11 @@ def check_archetype_rules(
     return errors
 
 
-def check_ancestry_feat_access(
-    build: ParsedBuild,
-    db: "PF2eDB | None" = None,
-) -> list[ValidationError]:
+def check_ancestry_feat_access(build: ParsedBuild) -> list[ValidationError]:
     """Ancestry feats must belong to the character's ancestry."""
     errors = []
 
-    if db is None or not build.ancestry_name:
+    if not build.ancestry_name:
         return errors
 
     ancestry_slug = build.ancestry_name.lower()
@@ -373,7 +316,7 @@ def check_ancestry_feat_access(
         if feat.slot_type != "ancestry":
             continue
 
-        entry = db.get_entry(feat.name, content_type=None)
+        entry = get_feat_data(feat.name)
         if not entry:
             continue
 
