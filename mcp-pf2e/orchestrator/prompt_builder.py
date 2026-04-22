@@ -401,6 +401,167 @@ def _build_markdown_level_sections(options: BuildOptions) -> str:
     return "\n\n".join(sections)
 
 
+_PLAN_SYSTEM_PROMPT = """\
+You are an expert Pathfinder 2nd Edition character builder planning feat selections.
+
+CRITICAL RULES:
+- Each feat can only be taken ONCE unless explicitly repeatable.
+- Dedication feats require: take at least 2 non-dedication archetype feats from an archetype before taking a second Dedication.
+- Feat prerequisites must be satisfied at the level the feat is taken.
+- Choose feats that synergize with each other and match the build concept.
+- Consider prerequisite chains: picking a feat now may unlock powerful options later.
+
+Output ONLY the feat selections as JSON. No ability scores, skills, or equipment — just feats."""
+
+
+def build_plan_schema(options: BuildOptions) -> dict:
+    """Build a lightweight schema for the feat planning pass — feats only."""
+    slots_by_level: dict[int, list[SlotOptions]] = {}
+    for so in options.slot_options:
+        slots_by_level.setdefault(so.slot.level, []).append(so)
+
+    level_props = {}
+    for level in sorted(slots_by_level):
+        slot_props = {}
+        slot_required = []
+        for so in slots_by_level[level]:
+            key = f"{so.slot.slot_type}_feat"
+            feat_names = sorted(set(o.name for o in so.options))
+            slot_props[key] = {"type": "string", "enum": feat_names}
+            slot_required.append(key)
+        level_props[str(level)] = {
+            "type": "object",
+            "properties": slot_props,
+            "required": slot_required,
+        }
+
+    return {
+        "type": "object",
+        "properties": {
+            "levels": {
+                "type": "object",
+                "properties": level_props,
+                "required": list(level_props.keys()),
+            },
+        },
+        "required": ["levels"],
+    }
+
+
+def build_plan_prompt(
+    request: str,
+    options: BuildOptions,
+    ranked_feats: dict[str, list[dict]] | None = None,
+) -> str:
+    """Build prompt for the feat planning pass — feats only, no build details."""
+    parts = []
+    parts.append(f"Build concept: {request}")
+    parts.append(f"Class: {options.spec.class_name.title()}")
+    if options.spec.ancestry_name:
+        parts.append(f"Ancestry: {options.spec.ancestry_name.title()}")
+    parts.append(f"Level: {options.spec.character_level}")
+    parts.append("")
+    parts.append("Select ONE feat for each slot below. Output ONLY the feat names as JSON.")
+    parts.append("Consider synergies across all levels — your choices should build toward a coherent strategy.")
+    parts.append("")
+    parts.append("=== AVAILABLE FEAT OPTIONS PER SLOT ===")
+    parts.append("")
+
+    slots_by_level: dict[int, list] = {}
+    for so in options.slot_options:
+        slots_by_level.setdefault(so.slot.level, []).append(so)
+
+    skill_feats_printed = False
+    for level in sorted(slots_by_level):
+        parts.append(f"--- Level {level} ---")
+        for so in slots_by_level[level]:
+            slot_label = so.slot.slot_type.upper()
+            slot_key = f"{level}_{so.slot.slot_type}"
+
+            if so.slot.slot_type == "skill":
+                if not skill_feats_printed:
+                    _append_grouped_skill_feats(parts, so)
+                    skill_feats_printed = True
+                else:
+                    parts.append(f"  {slot_label} FEAT: pick from skill feat list above")
+            elif ranked_feats and slot_key in ranked_feats:
+                ranked = ranked_feats[slot_key]
+                featured = [r["name"] for r in ranked if r.get("show_description")]
+                rest = [r["name"] for r in ranked if not r.get("show_description")]
+                parts.append(f"  {slot_label} FEAT ({len(so.options)} options, recommended first):")
+                parts.append(f"    ★ {', '.join(featured)}")
+                if rest:
+                    parts.append(f"    Other: {', '.join(rest)}")
+            elif len(so.options) > 30:
+                parts.append(f"  {slot_label} FEAT ({len(so.options)} options):")
+                parts.append(f"    {', '.join(o.name for o in so.options)}")
+            else:
+                parts.append(f"  {slot_label} FEAT ({len(so.options)} options):")
+                for opt in so.options:
+                    line = f"    - {opt.name}"
+                    if opt.prerequisites:
+                        line += f" [prereq: {opt.prerequisites}]"
+                    parts.append(line)
+        parts.append("")
+
+    return "\n".join(parts)
+
+
+def build_guided_schema(options: BuildOptions, planned_feats: dict) -> dict:
+    """Build full response schema with feat slots locked to planned choices.
+
+    Each feat slot becomes a single-value enum — the model can only pick the
+    planned feat. Non-feat fields (ability scores, skills, etc.) remain open.
+    """
+    schema = build_response_schema(options)
+
+    levels_props = schema.get("properties", {}).get("levels", {}).get("properties", {})
+    for level_str, level_schema in levels_props.items():
+        planned_level = planned_feats.get(level_str, {})
+        for slot_key, slot_schema in level_schema.get("properties", {}).items():
+            if slot_key in planned_level and planned_level[slot_key]:
+                slot_schema["enum"] = [planned_level[slot_key]]
+
+    return schema
+
+
+def build_guided_prompt(
+    request: str,
+    options: BuildOptions,
+    planned_feats: dict,
+    constraints: list[str] | None = None,
+) -> str:
+    """Build prompt for guided generation — feats pre-decided, fill in details."""
+    parts = []
+    parts.append(f"Build request: {request}")
+    parts.append("")
+    parts.append("=== FEAT PLAN (these choices are final — do not change them) ===")
+
+    for level_str in sorted(planned_feats, key=lambda x: int(x)):
+        slots = planned_feats[level_str]
+        picks = [f"{k.replace('_feat', '')}: {v}" for k, v in slots.items() if v]
+        parts.append(f"  Level {level_str}: {', '.join(picks)}")
+
+    parts.append("")
+    parts.append("Now generate the complete build. The feat choices above are LOCKED.")
+    parts.append("Focus on choosing ability scores, skills, heritage, background, and equipment that SUPPORT these feats.")
+    parts.append("")
+
+    if constraints:
+        parts.append("=== REQUIREMENTS FROM FEAT CHOICES ===")
+        for c in constraints:
+            parts.append(f"  - {c}")
+        parts.append("")
+
+    parts.append("IMPORTANT:")
+    parts.append("- Ability scores must be even numbers (base 10 + boosts of 2)")
+    parts.append("- Skills should include any skills required by your feat prerequisites")
+    parts.append("- Heritage must be a real heritage for your ancestry")
+    parts.append("")
+
+    return "\n".join(parts)
+
+
 def narrow_skill_feat_enums(
     schema: dict,
     trained_skills: list[str],

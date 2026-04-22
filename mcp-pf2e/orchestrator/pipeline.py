@@ -22,6 +22,8 @@ from orchestrator.prompt_builder import (
     build_system_prompt, build_generation_prompt, build_skeleton_prompts,
     build_skeleton_schema, build_response_schema,
     narrow_skill_feat_enums,
+    build_plan_schema, build_plan_prompt, build_guided_schema, build_guided_prompt,
+    _PLAN_SYSTEM_PROMPT,
 )
 
 OLLAMA_BASE_URL = "http://localhost:11434"
@@ -110,6 +112,281 @@ def _call_ollama(
             "finish_reason": finish_reason,
         }
     return content, round(elapsed, 2), usage
+
+
+def _run_planned_generation(
+    model: str,
+    options,
+    request: str,
+    character_level: int,
+    class_name: str,
+    ancestry_name: str,
+    provider_key: str,
+    temperature: float,
+    repair_temperature: float,
+    verbose: bool,
+    ranked_feats,
+    all_usages: list,
+    timings: dict,
+) -> dict | None:
+    """Two-pass generation: plan feats first, then fill in build details.
+
+    Returns a result dict on success, or None to fall back to single-pass.
+    """
+    # --- Pass 1: Feat Plan ---
+    if verbose:
+        print(f"[pipeline] Pass 1: Planning feat selections...")
+
+    t0 = time.time()
+    plan_prompt = build_plan_prompt(request, options, ranked_feats=ranked_feats)
+    plan_schema = build_plan_schema(options)
+    plan_max = 2048 if provider_key in THINKING_MODELS else 1024
+
+    plan_raw, plan_time, plan_usage = _call_ollama(
+        model, plan_prompt, _PLAN_SYSTEM_PROMPT, temperature,
+        response_schema=plan_schema, max_tokens=plan_max,
+    )
+    timings["plan"] = plan_time
+    all_usages.append(plan_usage)
+
+    if verbose:
+        print(f"[pipeline] Plan generated in {plan_time}s ({len(plan_raw)} chars)")
+        if plan_usage.get("finish_reason") == "length":
+            print(f"[pipeline] WARNING: Plan hit token limit ({plan_max})")
+        if len(plan_raw) < 50:
+            print(f"[pipeline] WARNING: Plan too short: {plan_raw}")
+
+    try:
+        plan_json = json.loads(plan_raw)
+    except json.JSONDecodeError:
+        if verbose:
+            print(f"[pipeline] Plan JSON parse failed, falling back")
+        return None
+
+    planned_feats = plan_json.get("levels", plan_json)
+
+    # --- Validate the plan ---
+    if verbose:
+        print(f"[pipeline] Validating feat plan...")
+
+    validator = BuildValidator()
+    from validator.types import ParsedBuild, ParsedFeatChoice
+
+    plan_build = ParsedBuild(
+        class_name=class_name,
+        ancestry_name=ancestry_name,
+        character_level=character_level,
+    )
+    plan_feats = []
+    for level_str, slots in planned_feats.items():
+        if not isinstance(slots, dict):
+            continue
+        for slot_key, feat_name in slots.items():
+            if not feat_name:
+                continue
+            slot_type = slot_key.replace("_feat", "")
+            plan_feats.append(ParsedFeatChoice(
+                name=feat_name, slot_type=slot_type, character_level=int(level_str),
+            ))
+    plan_build.feats = plan_feats
+    plan_validation = validator._run_rules(plan_build)
+
+    if verbose:
+        print(f"[pipeline] Plan: {plan_validation.error_count} errors, {len(plan_validation.warnings)} warnings")
+
+    # --- Repair plan if needed (1 attempt) ---
+    if not plan_validation.is_valid:
+        if verbose:
+            for e in plan_validation.errors:
+                print(f"  PLAN ERROR: {e.message}")
+            print(f"[pipeline] Repairing feat plan...")
+
+        import copy
+        repair_plan_schema = copy.deepcopy(plan_schema)
+
+        # Aggressive dedup: for each feat, keep it only in the first level's enum
+        _REPEATABLE = {"additional lore", "assurance", "skill training"}
+        feat_first_level: dict[str, int] = {}
+        for level_str in sorted(planned_feats, key=lambda x: int(x)):
+            slots = planned_feats[level_str]
+            if not isinstance(slots, dict):
+                continue
+            for feat_name in slots.values():
+                if feat_name and feat_name.lower() not in _REPEATABLE:
+                    if feat_name.lower() not in feat_first_level:
+                        feat_first_level[feat_name.lower()] = int(level_str)
+
+        levels_props = repair_plan_schema.get("properties", {}).get("levels", {}).get("properties", {})
+        removed = 0
+        for level_str, level_schema in levels_props.items():
+            lvl = int(level_str)
+            for slot_schema in level_schema.get("properties", {}).values():
+                if "enum" not in slot_schema:
+                    continue
+                orig = len(slot_schema["enum"])
+                slot_schema["enum"] = [
+                    f for f in slot_schema["enum"]
+                    if f.lower() in _REPEATABLE
+                    or f.lower() not in feat_first_level
+                    or feat_first_level[f.lower()] >= lvl
+                ]
+                removed += orig - len(slot_schema["enum"])
+        if verbose and removed:
+            print(f"[pipeline] Plan repair: removed {removed} already-taken feats from later enums")
+
+        repair_prompt = format_repair_prompt(plan_validation, request)
+        repair_input = f"{plan_raw}\n\n---\n\n{repair_prompt}"
+
+        plan_raw, repair_time, repair_usage = _call_ollama(
+            model, repair_input, _PLAN_SYSTEM_PROMPT, repair_temperature,
+            response_schema=repair_plan_schema, max_tokens=plan_max,
+        )
+        timings["plan_repair"] = repair_time
+        all_usages.append(repair_usage)
+
+        try:
+            plan_json = json.loads(plan_raw)
+            planned_feats = plan_json.get("levels", plan_json)
+        except json.JSONDecodeError:
+            if verbose:
+                print(f"[pipeline] Plan repair parse failed, falling back")
+            return None
+
+        # Re-validate
+        plan_build.feats = []
+        for level_str, slots in planned_feats.items():
+            if not isinstance(slots, dict):
+                continue
+            for slot_key, feat_name in slots.items():
+                if not feat_name:
+                    continue
+                slot_type = slot_key.replace("_feat", "")
+                plan_build.feats.append(ParsedFeatChoice(
+                    name=feat_name, slot_type=slot_type, character_level=int(level_str),
+                ))
+        plan_validation = validator._run_rules(plan_build)
+        if verbose:
+            print(f"[pipeline] Plan after repair: {plan_validation.error_count} errors")
+
+    # --- Collect constraints for full build ---
+    constraints = []
+    for feat in plan_build.feats:
+        entry = get_feat_data(feat.name)
+        if not entry:
+            continue
+        prereqs = entry.get("system", {}).get("prerequisites", {}).get("value", [])
+        for p in prereqs:
+            pval = p.get("value", "") if isinstance(p, dict) else str(p)
+            if not pval:
+                continue
+            # Flag ability score and skill requirements
+            pval_lower = pval.lower()
+            if any(a in pval_lower for a in ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]):
+                constraints.append(f"{feat.name} requires: {pval}")
+            elif "trained in" in pval_lower or "expert in" in pval_lower:
+                constraints.append(f"{feat.name} requires: {pval}")
+
+    if verbose and constraints:
+        print(f"[pipeline] {len(constraints)} constraints forwarded to full build")
+
+    # --- Pass 2: Guided full build ---
+    if verbose:
+        print(f"[pipeline] Pass 2: Generating full build with planned feats...")
+
+    t0 = time.time()
+    guided_prompt = build_guided_prompt(request, options, planned_feats, constraints=constraints)
+    guided_schema = build_guided_schema(options, planned_feats)
+    gen_max = 4096 if provider_key in THINKING_MODELS else 2048
+
+    raw_output, gen_time, gen_usage = _call_ollama(
+        model, guided_prompt, build_system_prompt(), 0.5,
+        response_schema=guided_schema, max_tokens=gen_max,
+    )
+    timings["generate"] = gen_time
+    all_usages.append(gen_usage)
+
+    if verbose:
+        print(f"[pipeline] Build generated in {gen_time}s ({len(raw_output)} chars)")
+
+    # --- Validate full build ---
+    t0 = time.time()
+    build_json = None
+    try:
+        build_json = json.loads(raw_output)
+        validation = validator.validate_json(
+            build_json,
+            expected_class=class_name,
+            expected_ancestry=ancestry_name,
+            expected_level=character_level,
+        )
+    except json.JSONDecodeError:
+        if verbose:
+            print(f"[pipeline] WARNING: Guided build JSON parse failed")
+        return None
+    timings["validate"] = round(time.time() - t0, 2)
+
+    if verbose:
+        print(f"[pipeline] Validation: {validation.error_count} errors, {len(validation.warnings)} warnings")
+
+    # --- One repair attempt if needed ---
+    attempts = 1
+    if not validation.is_valid:
+        if verbose:
+            print(f"[pipeline] Repair attempt (guided)...")
+            for e in validation.errors:
+                print(f"  ERROR: {e.message}")
+
+        repair_prompt = format_repair_prompt(validation, request)
+        repair_input = f"{raw_output}\n\n---\n\n{repair_prompt}"
+        repair_max = 2048 if provider_key in THINKING_MODELS else 1024
+
+        raw_output, repair_time, repair_usage = _call_ollama(
+            model, repair_input, build_system_prompt(), repair_temperature,
+            response_schema=guided_schema, max_tokens=repair_max,
+        )
+        timings["repair_1"] = repair_time
+        all_usages.append(repair_usage)
+        attempts += 1
+
+        try:
+            build_json = json.loads(raw_output)
+            validation = validator.validate_json(
+                build_json,
+                expected_class=class_name,
+                expected_ancestry=ancestry_name,
+                expected_level=character_level,
+            )
+        except json.JSONDecodeError:
+            pass
+
+        if verbose:
+            print(f"[pipeline] Post-repair: {validation.error_count} errors")
+
+    # --- Aggregate tokens ---
+    token_totals = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    for u in all_usages:
+        for k in token_totals:
+            token_totals[k] += u.get(k, 0)
+
+    status = "VALID" if validation.is_valid else f"INVALID ({validation.error_count} errors)"
+    if verbose:
+        print(f"\n[pipeline] Final: {status} after {attempts} attempt(s) (planned)")
+        print(f"[pipeline] Timings: {json.dumps(timings)}")
+
+    return {
+        "build_text": raw_output,
+        "build_json": build_json,
+        "validation": {
+            "is_valid": validation.is_valid,
+            "errors": [{"rule": e.rule, "message": e.message} for e in validation.errors],
+            "warnings": [{"rule": w.rule, "message": w.message} for w in validation.warnings],
+            "verified_feats": validation.verified_feats,
+        },
+        "attempts": attempts,
+        "timings": timings,
+        "tokens": token_totals,
+        "planned_feats": planned_feats,
+    }
 
 
 def run_build(
@@ -247,6 +524,26 @@ def run_build(
                 print(f"[pipeline] WARNING: Vector ranking failed, proceeding without ranking")
                 traceback.print_exc()
             ranked_feats = None
+
+    # Step 2.7: Use planned generation for high-slot builds
+    total_slots = len(options.slot_options)
+    if total_slots > 6 and json_mode:
+        if verbose:
+            print(f"[pipeline] High slot count ({total_slots}) — using feat planning pass")
+        planned_result = _run_planned_generation(
+            model=model, options=options, request=request,
+            character_level=character_level, class_name=class_name,
+            ancestry_name=ancestry_name, provider_key=provider_key,
+            temperature=temperature, repair_temperature=repair_temperature,
+            verbose=verbose, ranked_feats=ranked_feats,
+            all_usages=all_usages, timings=timings,
+        )
+        if planned_result is not None:
+            result.update(planned_result)
+            return result
+
+        if verbose:
+            print(f"[pipeline] Planned generation failed, falling back to single-pass")
 
     # Step 3: Build prompt + schema (schema cached for repair reuse)
     t0 = time.time()
