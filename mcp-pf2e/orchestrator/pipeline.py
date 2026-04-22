@@ -268,7 +268,9 @@ def _run_planned_generation(
         if verbose:
             print(f"[pipeline] Plan after repair: {plan_validation.error_count} errors")
 
-    # --- Collect constraints for full build ---
+    # --- Extract required skills from planned feats ---
+    _RANK_ORDER = {"trained": 1, "expert": 2, "master": 3, "legendary": 4}
+    required_skills: dict[str, str] = {}
     constraints = []
     for feat in plan_build.feats:
         entry = get_feat_data(feat.name)
@@ -279,15 +281,32 @@ def _run_planned_generation(
             pval = p.get("value", "") if isinstance(p, dict) else str(p)
             if not pval:
                 continue
-            # Flag ability score and skill requirements
             pval_lower = pval.lower()
+            # Parse "trained in Medicine", "expert in Athletics"
+            import re
+            for rank in ["trained", "expert", "master", "legendary"]:
+                if f"{rank} in " in pval_lower:
+                    # Extract skill names after "in"
+                    match = re.search(rf"{rank} in (.+)", pval_lower)
+                    if match:
+                        skill_text = match.group(1).strip()
+                        # Handle "Arcana, Nature, Occultism, or Religion"
+                        skill_names = re.split(r"[,]| or | and ", skill_text)
+                        for sname in skill_names:
+                            sname = sname.strip().rstrip(".")
+                            if sname and len(sname) > 2:
+                                current = required_skills.get(sname, "")
+                                if not current or _RANK_ORDER.get(rank, 0) > _RANK_ORDER.get(current, 0):
+                                    required_skills[sname] = rank
+                    break
+            # Collect non-skill constraints (ability scores etc)
             if any(a in pval_lower for a in ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]):
                 constraints.append(f"{feat.name} requires: {pval}")
-            elif "trained in" in pval_lower or "expert in" in pval_lower:
-                constraints.append(f"{feat.name} requires: {pval}")
 
+    if verbose and required_skills:
+        print(f"[pipeline] Required skills from feat prereqs: {required_skills}")
     if verbose and constraints:
-        print(f"[pipeline] {len(constraints)} constraints forwarded to full build")
+        print(f"[pipeline] {len(constraints)} ability constraints forwarded to full build")
 
     # --- Pass 2: Guided full build ---
     if verbose:
@@ -295,7 +314,7 @@ def _run_planned_generation(
 
     t0 = time.time()
     guided_prompt = build_guided_prompt(request, options, planned_feats, constraints=constraints)
-    guided_schema = build_guided_schema(options, planned_feats)
+    guided_schema = build_guided_schema(options, planned_feats, required_skills=required_skills)
     gen_max = 4096 if provider_key in THINKING_MODELS else 2048
 
     raw_output, gen_time, gen_usage = _call_ollama(

@@ -507,20 +507,49 @@ def build_plan_prompt(
     return "\n".join(parts)
 
 
-def build_guided_schema(options: BuildOptions, planned_feats: dict) -> dict:
+def build_guided_schema(
+    options: BuildOptions,
+    planned_feats: dict,
+    required_skills: dict[str, str] | None = None,
+) -> dict:
     """Build full response schema with feat slots locked to planned choices.
 
     Each feat slot becomes a single-value enum — the model can only pick the
-    planned feat. Non-feat fields (ability scores, skills, etc.) remain open.
+    planned feat. Required skills from feat prereqs are enforced as required
+    schema fields with minimum proficiency enums.
     """
     schema = build_response_schema(options)
 
+    # Lock feat slots to planned choices
     levels_props = schema.get("properties", {}).get("levels", {}).get("properties", {})
     for level_str, level_schema in levels_props.items():
         planned_level = planned_feats.get(level_str, {})
         for slot_key, slot_schema in level_schema.get("properties", {}).items():
             if slot_key in planned_level and planned_level[slot_key]:
                 slot_schema["enum"] = [planned_level[slot_key]]
+
+    # Enforce required skills from feat prerequisites
+    if required_skills:
+        _RANK_AT_LEAST = {
+            "trained": ["trained", "expert", "master", "legendary"],
+            "expert": ["expert", "master", "legendary"],
+            "master": ["master", "legendary"],
+            "legendary": ["legendary"],
+        }
+        skill_props = {}
+        for skill_name, min_rank in required_skills.items():
+            allowed = _RANK_AT_LEAST.get(min_rank, ["trained", "expert", "master", "legendary"])
+            skill_props[skill_name] = {"type": "string", "enum": allowed}
+
+        schema["properties"]["skills"] = {
+            "type": "object",
+            "properties": skill_props,
+            "required": list(skill_props.keys()),
+            "additionalProperties": {
+                "type": "string",
+                "enum": ["trained", "expert", "master", "legendary"],
+            },
+        }
 
     return schema
 
