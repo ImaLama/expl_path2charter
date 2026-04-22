@@ -320,19 +320,12 @@ def build_generation_prompt(
                     parts.append(f"  {slot_label} FEAT slot: pick from the skill feat list above (level {level} or lower)")
             elif ranked_feats and slot_key in ranked_feats:
                 ranked = ranked_feats[slot_key]
-                featured = [r for r in ranked if r.get("show_description")]
+                featured = [r["name"] for r in ranked if r.get("show_description")]
                 rest = [r["name"] for r in ranked if not r.get("show_description")]
-                parts.append(f"  {slot_label} FEAT slot ({len(so.options)} options, top {len(featured)} recommended for this concept):")
-                opts_by_name = {o.name: o for o in so.options}
-                for r in featured:
-                    opt = opts_by_name.get(r["name"])
-                    lvl = opt.level if opt else "?"
-                    line = f"    ★ {r['name']} (lvl {lvl})"
-                    if r.get("description"):
-                        line += f" — {r['description']}"
-                    parts.append(line)
+                parts.append(f"  {slot_label} FEAT slot ({len(so.options)} options, recommended first for this concept):")
+                parts.append(f"    ★ {', '.join(featured)}")
                 if rest:
-                    parts.append(f"    Other options: {', '.join(rest)}")
+                    parts.append(f"    Other: {', '.join(rest)}")
             elif len(so.options) > 30:
                 parts.append(f"  {slot_label} FEAT slot ({len(so.options)} options):")
                 names = [opt.name for opt in so.options]
