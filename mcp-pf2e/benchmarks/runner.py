@@ -91,6 +91,7 @@ def run_case(case: dict, config: dict, unsupported: list[str]) -> dict:
             "errors": [],
             "warnings": [],
             "skeleton": result.get("skeleton"),
+            "build_json": None,
         }
 
     print(f"\n[benchmark] Unloading generator, loading judge...")
@@ -120,6 +121,7 @@ def run_case(case: dict, config: dict, unsupported: list[str]) -> dict:
         "errors": [e["message"] for e in validation.get("errors", [])],
         "warnings": [w["message"] for w in validation.get("warnings", [])],
         "skeleton": result.get("skeleton"),
+        "build_json": result.get("build_json"),
     }
 
 
@@ -208,6 +210,33 @@ def run_benchmark(
 
                 with open(results_path, "a") as f:
                     f.write(json.dumps(entry) + "\n")
+
+                # Save build JSON with scores to builds/benchmark/<run_id>/
+                if case_result.get("build_json"):
+                    builds_dir = Path(__file__).parent.parent / "builds" / "benchmark" / run_id
+                    builds_dir.mkdir(parents=True, exist_ok=True)
+                    build_file = {
+                        "case_id": case["id"],
+                        "config_id": config["id"],
+                        "run_num": run_num + 1,
+                        "model": config["model"],
+                        "build": case_result["build_json"],
+                        "validation": {
+                            "valid": case_result["valid"],
+                            "errors": case_result["errors"],
+                            "warnings": case_result["warnings"],
+                        },
+                        "scores": {
+                            "theme": case_result["theme_score"],
+                            "synergy": case_result["synergy_score"],
+                            "overall": case_result["overall_score"],
+                            "notes": case_result["evaluator_notes"],
+                        },
+                    }
+                    suffix = f"_run{run_num + 1}" if runs_per_case > 1 else ""
+                    filename = f"{case['id']}_{config['id']}{suffix}.json"
+                    with open(builds_dir / filename, "w") as bf:
+                        json.dump(build_file, bf, indent=2)
 
                 status = "VALID" if case_result["valid"] else "INVALID"
                 print(f"\n  >> {status} | Theme: {case_result['theme_score']} | "

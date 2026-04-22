@@ -30,12 +30,13 @@ OLLAMA_OPENAI_URL = f"{OLLAMA_BASE_URL}/v1"
 LOCAL_MODELS = {
     "ollama-qwen3-32b": "qwen3:32b",
     "ollama-qwen32b": "qwen2.5:32b-instruct-q5_K_M",
+    "ollama-qwen25-coder": "qwen2.5-coder:32b-instruct-q6_K",
     "ollama-deepseek32b": "deepseek-r1:32b",
     "ollama-llama70b": "llama3.1:70b-instruct-q4_K_M",
     "ollama-nemo": "mistral-nemo:12b-instruct",
 }
 
-LARGE_MODELS = {"ollama-qwen3-32b", "ollama-qwen32b", "ollama-deepseek32b", "ollama-llama70b"}
+LARGE_MODELS = {"ollama-qwen3-32b", "ollama-qwen32b", "ollama-qwen25-coder", "ollama-deepseek32b", "ollama-llama70b"}
 THINKING_MODELS = {"ollama-qwen3-32b", "ollama-deepseek32b"}
 
 

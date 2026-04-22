@@ -124,14 +124,14 @@
       "notes": "Qwen3 32B thinking model, schema enforced"
     },
     {
-      "id": "qwen25-schema-on",
-      "model": "ollama-qwen32b",
+      "id": "qwen25-coder-schema-on",
+      "model": "ollama-qwen25-coder",
       "judge_model": "mistral-small3.2:24b",
       "schema_enforced": true,
       "temperature": 0.5,
       "max_repairs": 2,
       "use_vector_ranking": false,
-      "notes": "Qwen2.5 32B non-thinking, schema enforced"
+      "notes": "Qwen2.5-Coder 32B non-thinking, schema enforced"
     },
     {
       "id": "qwen3-with-ranking",
