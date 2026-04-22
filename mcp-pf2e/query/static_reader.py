@@ -393,3 +393,38 @@ def list_available_archetypes() -> list[str]:
     if not arch_dir.exists():
         return []
     return sorted(d.name for d in arch_dir.iterdir() if d.is_dir())
+
+
+@lru_cache(maxsize=1)
+def _build_feat_index() -> dict[str, Path]:
+    """Build name→filepath index across all feat directories."""
+    index = {}
+    feats_root = _STATIC_ROOT / "feats"
+    if not feats_root.exists():
+        return index
+    for filepath in feats_root.rglob("*.json"):
+        try:
+            data = json.loads(filepath.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and "name" in data:
+                index[data["name"].lower()] = filepath
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            continue
+    return index
+
+
+def get_feat_data(feat_name: str) -> dict | None:
+    """Look up a feat by name and return its raw FoundryVTT JSON.
+
+    Returns None if feat not found. This replaces db.get_entry() for
+    validator rules — no ChromaDB or embedding model needed.
+    """
+    index = _build_feat_index()
+    filepath = index.get(feat_name.lower())
+    if not filepath:
+        filepath = index.get(_slugify(feat_name))
+    if not filepath:
+        return None
+    try:
+        return json.loads(filepath.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return None
