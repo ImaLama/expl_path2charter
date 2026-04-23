@@ -207,6 +207,186 @@
       "max_repairs": 2,
       "use_vector_ranking": true,
       "notes": "Qwen3 32B + vector DB feat ranking"
+    },
+    {
+      "id": "mistral-t025",
+      "model": "ollama-mistral-small",
+      "judge_model": "qwen3:32b",
+      "schema_enforced": true,
+      "temperature": 0.25,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "notes": "Temperature sweep: Mistral-Small at 0.25"
+    },
+    {
+      "id": "mistral-t040",
+      "model": "ollama-mistral-small",
+      "judge_model": "qwen3:32b",
+      "schema_enforced": true,
+      "temperature": 0.4,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "notes": "Temperature sweep: Mistral-Small at 0.40"
+    },
+    {
+      "id": "mistral-t060",
+      "model": "ollama-mistral-small",
+      "judge_model": "qwen3:32b",
+      "schema_enforced": true,
+      "temperature": 0.6,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "notes": "Temperature sweep: Mistral-Small at 0.60"
+    },
+    {
+      "id": "mistral-t075",
+      "model": "ollama-mistral-small",
+      "judge_model": "qwen3:32b",
+      "schema_enforced": true,
+      "temperature": 0.75,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "notes": "Temperature sweep: Mistral-Small at 0.75"
+    },
+    {
+      "id": "phi4-t025",
+      "model": "ollama-phi4",
+      "judge_model": "mistral-small3.2:24b",
+      "schema_enforced": true,
+      "temperature": 0.25,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "notes": "Temperature sweep: Phi-4 at 0.25"
+    },
+    {
+      "id": "phi4-t040",
+      "model": "ollama-phi4",
+      "judge_model": "mistral-small3.2:24b",
+      "schema_enforced": true,
+      "temperature": 0.4,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "notes": "Temperature sweep: Phi-4 at 0.40"
+    },
+    {
+      "id": "phi4-t060",
+      "model": "ollama-phi4",
+      "judge_model": "mistral-small3.2:24b",
+      "schema_enforced": true,
+      "temperature": 0.6,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "notes": "Temperature sweep: Phi-4 at 0.60"
+    },
+    {
+      "id": "phi4-t075",
+      "model": "ollama-phi4",
+      "judge_model": "mistral-small3.2:24b",
+      "schema_enforced": true,
+      "temperature": 0.75,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "notes": "Temperature sweep: Phi-4 at 0.75"
+    },
+    {
+      "id": "mistral-rank-t025",
+      "model": "ollama-mistral-small",
+      "judge_model": "qwen3:32b",
+      "schema_enforced": true,
+      "temperature": 0.25,
+      "max_repairs": 2,
+      "use_vector_ranking": true,
+      "notes": "Temperature sweep: Mistral-Small + ranking at 0.25"
+    },
+    {
+      "id": "mistral-rank-t040",
+      "model": "ollama-mistral-small",
+      "judge_model": "qwen3:32b",
+      "schema_enforced": true,
+      "temperature": 0.4,
+      "max_repairs": 2,
+      "use_vector_ranking": true,
+      "notes": "Temperature sweep: Mistral-Small + ranking at 0.40"
+    },
+    {
+      "id": "mistral-rank-t060",
+      "model": "ollama-mistral-small",
+      "judge_model": "qwen3:32b",
+      "schema_enforced": true,
+      "temperature": 0.6,
+      "max_repairs": 2,
+      "use_vector_ranking": true,
+      "notes": "Temperature sweep: Mistral-Small + ranking at 0.60"
+    },
+    {
+      "id": "mistral-rank-t075",
+      "model": "ollama-mistral-small",
+      "judge_model": "qwen3:32b",
+      "schema_enforced": true,
+      "temperature": 0.75,
+      "max_repairs": 2,
+      "use_vector_ranking": true,
+      "notes": "Temperature sweep: Mistral-Small + ranking at 0.75"
+    },
+    {
+      "id": "mistral-stat-t025",
+      "model": "ollama-mistral-small",
+      "judge_model": "qwen3:32b",
+      "schema_enforced": true,
+      "temperature": 0.25,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "notes": "Statistical temp study: Mistral-Small at 0.25 (n=15)"
+    },
+    {
+      "id": "mistral-stat-t040",
+      "model": "ollama-mistral-small",
+      "judge_model": "qwen3:32b",
+      "schema_enforced": true,
+      "temperature": 0.40,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "notes": "Statistical temp study: Mistral-Small at 0.40 (n=15)"
+    },
+    {
+      "id": "mistral-stat-t055",
+      "model": "ollama-mistral-small",
+      "judge_model": "qwen3:32b",
+      "schema_enforced": true,
+      "temperature": 0.55,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "notes": "Statistical temp study: Mistral-Small at 0.55 (n=15)"
+    },
+    {
+      "id": "phi4-stat-t025",
+      "model": "ollama-phi4",
+      "judge_model": "mistral-small3.2:24b",
+      "schema_enforced": true,
+      "temperature": 0.25,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "notes": "Statistical temp study: Phi-4 at 0.25 (n=15)"
+    },
+    {
+      "id": "phi4-stat-t040",
+      "model": "ollama-phi4",
+      "judge_model": "mistral-small3.2:24b",
+      "schema_enforced": true,
+      "temperature": 0.40,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "notes": "Statistical temp study: Phi-4 at 0.40 (n=15)"
+    },
+    {
+      "id": "phi4-stat-t055",
+      "model": "ollama-phi4",
+      "judge_model": "mistral-small3.2:24b",
+      "schema_enforced": true,
+      "temperature": 0.55,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "notes": "Statistical temp study: Phi-4 at 0.55 (n=15)"
     }
   ]
 }
