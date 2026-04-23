@@ -456,28 +456,19 @@ def build_plan_schema(options: BuildOptions) -> dict:
     }
 
 
-def build_plan_prompt(
-    request: str,
+def _build_feat_options_block(
     options: BuildOptions,
     ranked_feats: dict[str, list[dict]] | None = None,
-) -> str:
-    """Build prompt for the feat planning pass — feats only, no build details."""
-    parts = []
-    parts.append(f"Build concept: {request}")
-    parts.append(f"Class: {options.spec.class_name.title()}")
-    if options.spec.ancestry_name:
-        parts.append(f"Ancestry: {options.spec.ancestry_name.title()}")
-    parts.append(f"Level: {options.spec.character_level}")
-    parts.append("")
-    if options.spec.dedications:
-        ded_names = ", ".join(f"{d.title()} Dedication" for d in options.spec.dedications)
-        parts.append(f"\nREQUIRED DEDICATIONS: This build MUST include: {ded_names}.")
-        parts.append("Take each Dedication feat at the earliest eligible class feat slot.")
-        parts.append("Then take at least 2 non-dedication archetype feats from each before adding another Dedication.\n")
+    annotate_prereqs: bool = False,
+    starting_skills: list[str] | None = None,
+    starting_ability_scores: dict[str, int] | None = None,
+) -> list[str]:
+    """Build the feat options listing, shared by plan and generation prompts.
 
-    parts.append("Select ONE feat for each slot below. Output ONLY the feat names as JSON.")
-    parts.append("Consider synergies across all levels — your choices should build toward a coherent strategy.")
-    parts.append("")
+    When annotate_prereqs=True, marks each feat with a check/cross based on
+    whether its prerequisites are met by the character's starting state.
+    """
+    parts = []
     parts.append("=== AVAILABLE FEAT OPTIONS PER SLOT ===")
     parts.append("")
 
@@ -512,10 +503,105 @@ def build_plan_prompt(
             else:
                 parts.append(f"  {slot_label} FEAT ({len(so.options)} options):")
                 for opt in so.options:
-                    line = f"    - {opt.name}"
-                    if opt.prerequisites:
-                        line += f" [prereq: {opt.prerequisites}]"
+                    if annotate_prereqs and opt.prerequisites:
+                        mark = _check_prereq_against_starting_state(
+                            opt.prerequisites, starting_skills, starting_ability_scores,
+                        )
+                        line = f"    {mark} {opt.name} (lvl {opt.level}) [prereq: {opt.prerequisites}]"
+                    else:
+                        line = f"    - {opt.name}"
+                        if opt.prerequisites:
+                            line += f" [prereq: {opt.prerequisites}]"
+                    if opt.rarity != "common":
+                        line += f" [{opt.rarity}]"
                     parts.append(line)
+        parts.append("")
+
+    return parts
+
+
+def _check_prereq_against_starting_state(
+    prereq_text: str,
+    starting_skills: list[str] | None,
+    starting_ability_scores: dict[str, int] | None,
+) -> str:
+    """Check a prerequisite string against starting state. Returns a mark."""
+    prereq_lower = prereq_text.lower()
+    skills = [s.lower() for s in (starting_skills or [])]
+    scores = starting_ability_scores or {}
+
+    for keyword in ["trained in ", "expert in ", "master in "]:
+        if keyword in prereq_lower:
+            skill_name = prereq_lower.split(keyword, 1)[1].split(",")[0].split(";")[0].strip()
+            if skill_name not in skills:
+                return "[!]"
+            return "[ok]"
+
+    for ability in ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]:
+        if ability in prereq_lower:
+            return "[-]"
+
+    return "[ok]"
+
+
+_PLAN_STATIC_PREFIX = """\
+Select ONE feat for each slot below. Output ONLY the feat names as JSON.
+Consider synergies across all levels — your choices should build toward a coherent strategy.
+"""
+
+
+def build_plan_prompt(
+    request: str,
+    options: BuildOptions,
+    ranked_feats: dict[str, list[dict]] | None = None,
+    scratchpad_mode: str = "none",
+    starting_skills: list[str] | None = None,
+    starting_ability_scores: dict[str, int] | None = None,
+) -> str:
+    """Build prompt for the feat planning pass — feats only, no build details.
+
+    Prompt structure: [static prefix] + [feat options] + [dynamic suffix]
+    for KV cache reuse across builds with same class/level.
+
+    scratchpad_mode: "none" (baseline), "reminder" (variant b), "annotated" (variant c)
+    """
+    parts = []
+
+    # --- Static prefix (cacheable across same-class builds) ---
+    parts.append(_PLAN_STATIC_PREFIX)
+
+    # Feat options (static for same class/level/ancestry combo)
+    annotate = scratchpad_mode == "annotated"
+    parts.extend(_build_feat_options_block(
+        options, ranked_feats,
+        annotate_prereqs=annotate,
+        starting_skills=starting_skills,
+        starting_ability_scores=starting_ability_scores,
+    ))
+
+    # --- Dynamic suffix (per-build) ---
+    parts.append(f"Build concept: {request}")
+    parts.append(f"Class: {options.spec.class_name.title()}")
+    if options.spec.ancestry_name:
+        parts.append(f"Ancestry: {options.spec.ancestry_name.title()}")
+    parts.append(f"Level: {options.spec.character_level}")
+    parts.append("")
+
+    if options.spec.dedications:
+        ded_names = ", ".join(f"{d.title()} Dedication" for d in options.spec.dedications)
+        parts.append(f"REQUIRED DEDICATIONS: This build MUST include: {ded_names}.")
+        parts.append("Take each Dedication feat at the earliest eligible class feat slot.")
+        parts.append("Then take at least 2 non-dedication archetype feats from each before adding another Dedication.")
+        parts.append("")
+
+    # --- Scratchpad (end of prompt for maximum recency bias) ---
+    if scratchpad_mode in ("reminder", "annotated"):
+        parts.append("=== BUILD STATE TRACKING ===")
+        parts.append("As you select feats, carefully track:")
+        parts.append("- Which feats you have already selected — NEVER pick the same feat twice")
+        parts.append("- Which skills your selected feats will require — you must ensure these are trainable")
+        parts.append("- Dedication rule: you need 2+ non-dedication archetype feats from a dedication before taking another Dedication feat")
+        parts.append("- Fill ALL feat slots — do not leave any empty")
         parts.append("")
 
     return "\n".join(parts)

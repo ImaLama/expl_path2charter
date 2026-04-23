@@ -387,6 +387,72 @@
       "max_repairs": 2,
       "use_vector_ranking": false,
       "notes": "Statistical temp study: Phi-4 at 0.55 (n=15)"
+    },
+    {
+      "id": "mistral-sp-none",
+      "model": "ollama-mistral-small",
+      "judge_model": "qwen3:32b",
+      "schema_enforced": true,
+      "temperature": 0.55,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "scratchpad_mode": "none",
+      "notes": "Scratchpad experiment: Mistral baseline (no scratchpad)"
+    },
+    {
+      "id": "mistral-sp-reminder",
+      "model": "ollama-mistral-small",
+      "judge_model": "qwen3:32b",
+      "schema_enforced": true,
+      "temperature": 0.55,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "scratchpad_mode": "reminder",
+      "notes": "Scratchpad experiment: Mistral + reminder scratchpad"
+    },
+    {
+      "id": "mistral-sp-annotated",
+      "model": "ollama-mistral-small",
+      "judge_model": "qwen3:32b",
+      "schema_enforced": true,
+      "temperature": 0.55,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "scratchpad_mode": "annotated",
+      "notes": "Scratchpad experiment: Mistral + annotated candidates"
+    },
+    {
+      "id": "phi4-sp-none",
+      "model": "ollama-phi4",
+      "judge_model": "mistral-small3.2:24b",
+      "schema_enforced": true,
+      "temperature": 0.25,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "scratchpad_mode": "none",
+      "notes": "Scratchpad experiment: Phi-4 baseline (no scratchpad)"
+    },
+    {
+      "id": "phi4-sp-reminder",
+      "model": "ollama-phi4",
+      "judge_model": "mistral-small3.2:24b",
+      "schema_enforced": true,
+      "temperature": 0.25,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "scratchpad_mode": "reminder",
+      "notes": "Scratchpad experiment: Phi-4 + reminder scratchpad"
+    },
+    {
+      "id": "phi4-sp-annotated",
+      "model": "ollama-phi4",
+      "judge_model": "mistral-small3.2:24b",
+      "schema_enforced": true,
+      "temperature": 0.25,
+      "max_repairs": 2,
+      "use_vector_ranking": false,
+      "scratchpad_mode": "annotated",
+      "notes": "Scratchpad experiment: Phi-4 + annotated candidates"
     }
   ]
 }

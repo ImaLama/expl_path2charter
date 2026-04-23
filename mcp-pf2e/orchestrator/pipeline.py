@@ -140,6 +140,7 @@ def _run_planned_generation(
     all_usages: list,
     timings: dict,
     ollama_options: dict | None = None,
+    scratchpad_mode: str = "none",
 ) -> dict | None:
     """Two-pass generation: plan feats first, then fill in build details.
 
@@ -150,7 +151,17 @@ def _run_planned_generation(
         print(f"[pipeline] Pass 1: Planning feat selections...")
 
     t0 = time.time()
-    plan_prompt = build_plan_prompt(request, options, ranked_feats=ranked_feats)
+    starting_skills = None
+    if scratchpad_mode == "annotated":
+        from query.static_reader import get_class_trained_skills
+        class_skills = get_class_trained_skills(class_name)
+        starting_skills = class_skills.get("fixed", [])
+
+    plan_prompt = build_plan_prompt(
+        request, options, ranked_feats=ranked_feats,
+        scratchpad_mode=scratchpad_mode,
+        starting_skills=starting_skills,
+    )
     plan_schema = build_plan_schema(options)
     plan_max = 2048 if provider_key in THINKING_MODELS else 1024
 
@@ -469,6 +480,7 @@ def run_build(
     output_format: str = "json",
     use_vector_ranking: bool = False,
     ollama_options: dict | None = None,
+    scratchpad_mode: str = "none",
     verbose: bool = True,
 ) -> dict:
     """Full build pipeline with optional two-pass mode.
@@ -607,6 +619,7 @@ def run_build(
             verbose=verbose, ranked_feats=ranked_feats,
             all_usages=all_usages, timings=timings,
             ollama_options=ollama_options,
+            scratchpad_mode=scratchpad_mode,
         )
         if planned_result is not None:
             result.update(planned_result)

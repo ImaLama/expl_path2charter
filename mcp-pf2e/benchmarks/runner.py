@@ -17,7 +17,7 @@ RESULTS_PATH = Path(__file__).parent / "results.jsonl"
 
 SUPPORTED_CONFIG_KEYS = {
     "id", "model", "judge_model", "schema_enforced", "temperature", "max_repairs",
-    "use_vector_ranking", "ollama_options", "notes",
+    "use_vector_ranking", "ollama_options", "scratchpad_mode", "notes",
 }
 
 
@@ -75,6 +75,7 @@ def run_case(case: dict, config: dict, unsupported: list[str]) -> dict:
         output_format=output_format,
         use_vector_ranking=config.get("use_vector_ranking", False),
         ollama_options=config.get("ollama_options"),
+        scratchpad_mode=config.get("scratchpad_mode", "none"),
         verbose=True,
     )
 
