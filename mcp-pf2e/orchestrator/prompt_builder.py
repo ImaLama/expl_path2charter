@@ -739,35 +739,36 @@ def build_priority_prompt(
 ) -> str:
     """Build prompt for the upfront priority LLM call."""
     parts = []
-    parts.append("If the build concept explicitly names a specific PF2e background or heritage "
-                 "(e.g., 'barkeep thaumaturge', 'moon elf fighter'), you MUST choose that exact one. "
-                 "Do not substitute a thematically similar alternative.")
-    parts.append("")
+
+    if available_backgrounds or available_heritages:
+        parts.append("If the build concept names a specific PF2e background or heritage, "
+                     "you MUST choose that exact one. Do not substitute alternatives.")
+        parts.append("")
+
     parts.append(f"Build concept: {request}")
     parts.append(f"Class: {class_name.title()} (key ability: {' or '.join(a.upper() for a in class_key_abilities)})")
-    parts.append(f"Ancestry: {ancestry_name.title()}")
-    parts.append(f"Level: {character_level}")
+    parts.append(f"Ancestry: {ancestry_name.title()}, Level: {character_level}")
     parts.append("")
-    parts.append("Choose ability score priorities, skill training priorities, background, and heritage for this build.")
-    parts.append("")
-    parts.append("ABILITY PRIORITY: Rank all 6 abilities from most to least important for this concept.")
-    parts.append(f"The class key ability ({' or '.join(a.upper() for a in class_key_abilities)}) should usually be ranked first or second.")
+
+    parts.append("ABILITY PRIORITY: Rank all 6 abilities from most to least important.")
+    parts.append(f"Key ability ({' or '.join(a.upper() for a in class_key_abilities)}) should usually be first or second.")
     if dedication_requirements:
-        parts.append("IMPORTANT — Dedication ability requirements that MUST be met:")
+        parts.append("Dedication requirements that MUST be met:")
         for req in dedication_requirements:
             parts.append(f"  - {req}")
-        parts.append("Rank these abilities high enough to reach the required scores.")
-    parts.append("Free ability boosts will be distributed in this priority order.")
     parts.append("")
-    parts.append(f"SKILL PRIORITY: Choose {free_skill_slots} skills to train (beyond class grants).")
+
+    parts.append(f"SKILL PRIORITY: Choose {free_skill_slots} skills to train beyond class grants.")
     if class_fixed_skills:
-        parts.append(f"Already trained from class: {', '.join(s.title() for s in class_fixed_skills)}")
-    parts.append(f"Available skills: {', '.join(s.title() for s in _ALL_SKILLS)}")
-    parts.append("Pick skills that support the build concept and feat prerequisites.")
-    parts.append("")
-    parts.append("BACKGROUND: Choose a background that fits the concept and provides useful skill training and ability boosts.")
+        parts.append(f"Already trained: {', '.join(s.title() for s in class_fixed_skills)}")
+    parts.append(f"Available: {', '.join(s.title() for s in _ALL_SKILLS)}")
+
+    if available_backgrounds:
+        parts.append("")
+        parts.append("BACKGROUND: Choose one that fits the concept and provides useful skills/boosts.")
     if available_heritages:
         parts.append(f"HERITAGE: Choose a heritage for this {ancestry_name.title()}.")
+
     return "\n".join(parts)
 
 
@@ -779,7 +780,12 @@ def build_priority_schema(
     available_backgrounds: list[str] | None = None,
     available_heritages: list[str] | None = None,
 ) -> dict:
-    """Schema for the priority call response."""
+    """Schema for the priority call response.
+
+    Only includes background/heritage fields when they need to be picked
+    (not pre-specified). Pre-specified values are locked — the LLM isn't
+    asked to choose what's already decided.
+    """
     props = {
         "ability_priority": {
             "type": "array",
@@ -793,15 +799,15 @@ def build_priority_schema(
             "minItems": min(free_skill_slots, len(_ALL_SKILLS)),
             "maxItems": max(free_skill_slots, 1),
         },
-        "background": {"type": "string"},
-        "heritage": {"type": "string"},
     }
-    required = ["ability_priority", "skill_priority", "background", "heritage"]
+    required = ["ability_priority", "skill_priority"]
 
     if available_backgrounds:
-        props["background"]["enum"] = available_backgrounds
+        props["background"] = {"type": "string", "enum": available_backgrounds}
+        required.append("background")
     if available_heritages:
-        props["heritage"]["enum"] = available_heritages
+        props["heritage"] = {"type": "string", "enum": available_heritages}
+        required.append("heritage")
 
     return {
         "type": "object",

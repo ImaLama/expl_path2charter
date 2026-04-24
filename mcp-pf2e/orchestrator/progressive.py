@@ -640,20 +640,23 @@ def progressive_build(
                             dedication_requirements.append(f"{f.name} requires {p.raw}")
 
     # Get available backgrounds and heritages for the priority call
+    # Only include background/heritage in the priority call if not pre-specified
     from query.static_reader import list_backgrounds, list_heritages
-    available_backgrounds = list_backgrounds()
-    available_heritages = list_heritages(ancestry_name) if ancestry_name else []
+    pick_background = not background_name
+    pick_heritage = True  # heritage is never pre-specified currently
+    available_backgrounds = list_backgrounds() if pick_background else None
+    available_heritages = (list_heritages(ancestry_name) if ancestry_name else []) if pick_heritage else None
 
     priority_prompt = build_priority_prompt(
         request, class_name, ancestry_name, character_level,
         class_key, free_skill_slots, class_ts["fixed"],
         dedication_requirements=dedication_requirements or None,
-        available_backgrounds=available_backgrounds or None,
+        available_backgrounds=available_backgrounds,
         available_heritages=available_heritages or None,
     )
     priority_schema = build_priority_schema(
         free_skill_slots,
-        available_backgrounds=available_backgrounds or None,
+        available_backgrounds=available_backgrounds,
         available_heritages=available_heritages or None,
     )
 
@@ -1009,6 +1012,25 @@ def progressive_build(
         key = f"{feat.slot_type}_feat"
         build_json["levels"][level_str][key] = feat.name
 
+    # Verify fixed-value adherence (pipeline bugs, not LLM failures)
+    adherence_errors = []
+    if build_json["class"] != class_name:
+        adherence_errors.append(f"Class drift: specified '{class_name}', got '{build_json['class']}'")
+    if build_json["ancestry"] != ancestry_name:
+        adherence_errors.append(f"Ancestry drift: specified '{ancestry_name}', got '{build_json['ancestry']}'")
+    if background_name and build_json["background"] != background_name:
+        adherence_errors.append(f"Background drift: specified '{background_name}', got '{build_json['background']}'")
+    if build_json["level"] != character_level:
+        adherence_errors.append(f"Level drift: specified {character_level}, got {build_json['level']}")
+    for ded in dedications:
+        ded_lower = f"{ded} dedication".lower()
+        if not any(f.name.lower() == ded_lower for f in state.feats_chosen):
+            adherence_errors.append(f"Missing dedication: '{ded}' specified but not in build")
+    if adherence_errors and verbose:
+        print(f"[progressive] INPUT ADHERENCE ERRORS (pipeline bugs):")
+        for ae in adherence_errors:
+            print(f"  BUG: {ae}")
+
     validator = BuildValidator()
     validation = validator.validate_json(
         build_json,
@@ -1059,4 +1081,5 @@ def progressive_build(
             "scores_by_level": state.ability_plan.scores_by_level,
         },
         "skill_priority": skill_priority,
+        "adherence_errors": adherence_errors,
     }
