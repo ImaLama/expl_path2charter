@@ -481,6 +481,7 @@ def run_build(
     use_vector_ranking: bool = False,
     ollama_options: dict | None = None,
     scratchpad_mode: str = "none",
+    generation_mode: str = "planned",
     verbose: bool = True,
 ) -> dict:
     """Full build pipeline with optional two-pass mode.
@@ -606,7 +607,24 @@ def run_build(
                 traceback.print_exc()
             ranked_feats = None
 
-    # Step 2.7: Use planned generation for high-slot builds
+    # Step 2.7: Progressive generation mode
+    if generation_mode == "progressive" and json_mode:
+        if verbose:
+            print(f"[pipeline] Using progressive generation mode")
+        from orchestrator.progressive import progressive_build
+        background_name = result.get("skeleton", {}).get("background", "")
+        prog_result = progressive_build(
+            options=options, request=request, model=model,
+            character_level=character_level, class_name=class_name,
+            ancestry_name=ancestry_name, dedications=dedications or [],
+            background_name=background_name,
+            temperature=temperature, ollama_options=ollama_options,
+            verbose=verbose,
+        )
+        result.update(prog_result)
+        return result
+
+    # Step 2.8: Use planned generation for high-slot builds
     total_slots = len(options.slot_options)
     if total_slots > 6 and json_mode:
         if verbose:

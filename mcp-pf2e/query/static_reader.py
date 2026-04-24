@@ -396,6 +396,93 @@ def list_available_archetypes() -> list[str]:
     return sorted(d.name for d in arch_dir.iterdir() if d.is_dir())
 
 
+@lru_cache(maxsize=32)
+def get_ancestry_boosts(ancestry_name: str) -> tuple[list[str], int, list[str]]:
+    """Get ancestry ability boost/flaw info.
+
+    Returns (fixed_boosts, free_boost_count, flaws).
+    fixed_boosts: abilities that always get +2 (e.g., ['cha', 'dex'] for goblin)
+    free_boost_count: number of free boosts (choose any ability)
+    flaws: abilities that get -2 (e.g., ['wis'] for goblin)
+    """
+    data = get_ancestry_data(ancestry_name)
+    if not data:
+        return [], 0, []
+    boosts = data.get("system", {}).get("boosts", {})
+    flaws_data = data.get("system", {}).get("flaws", {})
+
+    fixed = []
+    free_count = 0
+    for _key, val in sorted(boosts.items()):
+        abilities = val.get("value", [])
+        if len(abilities) == 6:
+            free_count += 1
+        elif len(abilities) == 1:
+            fixed.append(abilities[0])
+
+    flaw_list = []
+    for _key, val in sorted(flaws_data.items()):
+        flaw_list.extend(val.get("value", []))
+
+    return fixed, free_count, flaw_list
+
+
+@lru_cache(maxsize=64)
+def get_background_boosts(background_name: str) -> tuple[list[str], int]:
+    """Get background ability boost info.
+
+    Returns (fixed_options, free_boost_count).
+    fixed_options: abilities the background can boost (pick one), e.g. ['cha', 'int']
+    free_boost_count: number of free boosts (always 1 for backgrounds)
+    """
+    data = get_background_data(background_name)
+    if not data:
+        return [], 0
+    boosts = data.get("system", {}).get("boosts", {})
+
+    fixed_options = []
+    free_count = 0
+    for _key, val in sorted(boosts.items()):
+        abilities = val.get("value", [])
+        if len(abilities) == 6:
+            free_count += 1
+        elif len(abilities) >= 1:
+            fixed_options = abilities
+
+    return fixed_options, free_count
+
+
+@lru_cache(maxsize=64)
+def get_background_trained_skills(background_name: str) -> list[str]:
+    """Get skills granted as trained by a background."""
+    data = get_background_data(background_name)
+    if not data:
+        return []
+    ts = data.get("system", {}).get("trainedSkills", {})
+    skills = list(ts.get("value", []))
+    skills.extend(ts.get("lore", []))
+    return skills
+
+
+@lru_cache(maxsize=32)
+def get_class_key_ability(class_name: str) -> list[str]:
+    """Get the key ability options for a class (e.g., ['str', 'dex'] for fighter)."""
+    data = get_class_data(class_name)
+    if not data:
+        return []
+    return data.get("system", {}).get("keyAbility", {}).get("value", [])
+
+
+@lru_cache(maxsize=32)
+def get_skill_increase_levels(class_name: str) -> list[int]:
+    """Get the character levels at which skill increases are granted."""
+    data = get_class_data(class_name)
+    if not data:
+        return []
+    levels = data.get("system", {}).get("skillIncreaseLevels", {}).get("value", [])
+    return sorted(levels)
+
+
 @lru_cache(maxsize=1)
 def _build_feat_index() -> dict[str, Path]:
     """Build name→filepath index across all feat directories."""

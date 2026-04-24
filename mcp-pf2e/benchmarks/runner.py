@@ -17,7 +17,7 @@ RESULTS_PATH = Path(__file__).parent / "results.jsonl"
 
 SUPPORTED_CONFIG_KEYS = {
     "id", "model", "judge_model", "schema_enforced", "temperature", "max_repairs",
-    "use_vector_ranking", "ollama_options", "scratchpad_mode", "notes",
+    "use_vector_ranking", "ollama_options", "scratchpad_mode", "generation_mode", "notes",
 }
 
 
@@ -76,6 +76,7 @@ def run_case(case: dict, config: dict, unsupported: list[str]) -> dict:
         use_vector_ranking=config.get("use_vector_ranking", False),
         ollama_options=config.get("ollama_options"),
         scratchpad_mode=config.get("scratchpad_mode", "none"),
+        generation_mode=config.get("generation_mode", "planned"),
         verbose=True,
     )
 
@@ -126,6 +127,8 @@ def run_case(case: dict, config: dict, unsupported: list[str]) -> dict:
         "warnings": [w["message"] for w in validation.get("warnings", [])],
         "skeleton": result.get("skeleton"),
         "build_json": result.get("build_json"),
+        "slot_stats": result.get("slot_stats"),
+        "trace": result.get("trace"),
     }
 
 
@@ -210,6 +213,8 @@ def run_benchmark(
                     "errors": case_result["errors"],
                     "warnings": case_result["warnings"],
                     "unsupported_config": unsupported,
+                    "generation_mode": config.get("generation_mode", "planned"),
+                    "slot_stats": case_result.get("slot_stats"),
                     "human_feedback": "",
                 }
 
@@ -237,6 +242,8 @@ def run_benchmark(
                             "overall": case_result["overall_score"],
                             "notes": case_result["evaluator_notes"],
                         },
+                        "slot_stats": case_result.get("slot_stats"),
+                        "trace": case_result.get("trace"),
                     }
                     suffix = f"_run{run_num + 1}" if runs_per_case > 1 else ""
                     filename = f"{case['id']}_{config['id']}{suffix}.json"

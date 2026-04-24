@@ -453,6 +453,28 @@
       "use_vector_ranking": false,
       "scratchpad_mode": "annotated",
       "notes": "Scratchpad experiment: Phi-4 + annotated candidates"
+    },
+    {
+      "id": "mistral-progressive",
+      "model": "ollama-mistral-small",
+      "judge_model": "qwen3:32b",
+      "schema_enforced": true,
+      "temperature": 0.5,
+      "max_repairs": 0,
+      "use_vector_ranking": false,
+      "generation_mode": "progressive",
+      "notes": "Progressive generation: Mistral-Small, per-slot agentic loop"
+    },
+    {
+      "id": "phi4-progressive",
+      "model": "ollama-phi4",
+      "judge_model": "mistral-small3.2:24b",
+      "schema_enforced": true,
+      "temperature": 0.5,
+      "max_repairs": 0,
+      "use_vector_ranking": false,
+      "generation_mode": "progressive",
+      "notes": "Progressive generation: Phi-4, per-slot agentic loop"
     }
   ]
 }
