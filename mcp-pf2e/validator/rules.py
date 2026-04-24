@@ -463,21 +463,19 @@ def check_skill_counts(build: ParsedBuild) -> list[ValidationError]:
 def check_ability_scores(build: ParsedBuild) -> list[ValidationError]:
     """Bounds-check ability scores — catch common LLM errors without exact verification.
 
-    Checks: odd scores, scores above maximum achievable, key ability too low,
+    Checks: scores above maximum achievable, key ability too low,
     scores below 8 without explanation. Does NOT try to verify exact boost choices.
+
+    PF2e Remaster: boosts add +2 below 18, +1 at/above 18. Odd scores (19, 21, etc.)
+    are legal at L5+ when an ability at 18 receives a +1 boost.
     """
     errors = []
 
     if not build.ability_scores or build.character_level == 0:
         return errors
 
-    # Calculate maximum achievable at this level
-    # Level 1: base 10 + up to ~7 boosts possible (2 ancestry + 1 background + 1 class + 4 free - 1 flaw)
-    # Each boost below 18 adds +2, above 18 adds +1
-    # Level 5/10/15/20 each add 4 more boosts
+    # Maximum achievable: 18 at L1, then +1 per boost round (above 18, boosts add +1)
     level_boost_rounds = sum(1 for lvl in [5, 10, 15, 20] if lvl <= build.character_level)
-    # Theoretical max: 18 at level 1 + level_boost_rounds * 1 (above 18, boosts add +1)
-    # Realistic max at level 1: 18 (very focused), level 5: 19, level 10: 20, level 20: 22+
     max_at_level = 18 + level_boost_rounds
 
     # Get key ability for the class
@@ -489,15 +487,6 @@ def check_ability_scores(build: ParsedBuild) -> list[ValidationError]:
     for ability, score in build.ability_scores.items():
         if not isinstance(score, int):
             continue
-
-        # Odd scores are impossible (base 10 + even boosts)
-        if score % 2 != 0:
-            errors.append(ValidationError(
-                rule="ability_scores",
-                severity="error",
-                message=f"{ability.upper()} {score} is odd — PF2e ability scores are always even (base 10 + boosts of 2).",
-                details={"ability": ability, "score": score},
-            ))
 
         # Score above maximum achievable
         if score > max_at_level:

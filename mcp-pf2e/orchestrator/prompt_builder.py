@@ -4,7 +4,7 @@ import copy
 import json
 
 from query.types import BuildOptions, SlotOptions
-from query.static_reader import list_available_classes, list_available_ancestries, list_heritages, list_backgrounds, list_skill_feats_for_skills
+from query.static_reader import list_available_classes, list_available_ancestries, list_heritages, list_backgrounds, list_skill_feats_for_skills, _ALL_SKILLS
 
 
 _SKELETON_SYSTEM_PROMPT = """\
@@ -53,7 +53,7 @@ CRITICAL RULES:
 - Dedication feats (archetypes) follow special rules: you must take at least 2 non-dedication feats from an archetype before taking a second Dedication feat.
 - Feat prerequisites must be satisfied (a feat requiring another feat means that feat was taken at an earlier level).
 - Ability scores use the standard boost system: 4 free boosts at level 1, plus ancestry/background/class boosts.
-- Ability scores must be RAW SCORES (e.g., 10, 12, 14, 16, 18), NOT modifiers. A boost raises a score by 2 (e.g., 10 → 12). Starting base is 10 for all abilities.
+- Ability scores must be RAW SCORES (e.g., 10, 12, 14, 16, 18, 19), NOT modifiers. A boost raises a score by 2 (or by 1 if the score is already 18 or higher). Starting base is 10 for all abilities.
 - In the "skills" field, list ALL skills the character is trained or better in, with rank: "trained", "expert", "master", or "legendary". Skills come from: class training, background, and skill increases at odd levels (3, 5, 7, ...). Expert requires level 3+, master requires level 7+, legendary requires level 15+.
 - For general and skill feat slots, use ONLY real PF2e feat names (e.g., "Intimidating Glare", "Assurance", "Toughness"). Do NOT use skill names or generic terms as feat names.
 
@@ -683,7 +683,7 @@ def build_guided_prompt(
         parts.append("")
 
     parts.append("IMPORTANT:")
-    parts.append("- Ability scores must be even numbers (base 10 + boosts of 2)")
+    parts.append("- Ability scores: base 10 + boosts of 2 (or +1 if score is 18+). Odd scores like 19, 21 are valid at higher levels.")
     parts.append("- Skills should include any skills required by your feat prerequisites")
     parts.append("- Heritage must be a real heritage for your ancestry")
     parts.append("")
@@ -712,3 +712,217 @@ def narrow_skill_feat_enums(
             if level_names:
                 slot_props["skill_feat"]["enum"] = level_names
     return narrowed
+
+
+# ---------------------------------------------------------------------------
+# Progressive generation: per-slot prompts and schemas
+# ---------------------------------------------------------------------------
+
+_PRIORITY_SYSTEM_PROMPT = """\
+You are an expert Pathfinder 2nd Edition character builder. Given a build concept, \
+choose ability score priorities and skill training priorities.
+
+Output ONLY valid JSON matching the schema provided."""
+
+
+def build_priority_prompt(
+    request: str,
+    class_name: str,
+    ancestry_name: str,
+    character_level: int,
+    class_key_abilities: list[str],
+    free_skill_slots: int,
+    class_fixed_skills: list[str],
+    dedication_requirements: list[str] | None = None,
+    available_backgrounds: list[str] | None = None,
+    available_heritages: list[str] | None = None,
+) -> str:
+    """Build prompt for the upfront priority LLM call."""
+    parts = []
+    parts.append(f"Build concept: {request}")
+    parts.append(f"Class: {class_name.title()} (key ability: {' or '.join(a.upper() for a in class_key_abilities)})")
+    parts.append(f"Ancestry: {ancestry_name.title()}")
+    parts.append(f"Level: {character_level}")
+    parts.append("")
+    parts.append("Choose ability score priorities, skill training priorities, background, and heritage for this build.")
+    parts.append("")
+    parts.append("ABILITY PRIORITY: Rank all 6 abilities from most to least important for this concept.")
+    parts.append(f"The class key ability ({' or '.join(a.upper() for a in class_key_abilities)}) should usually be ranked first or second.")
+    if dedication_requirements:
+        parts.append("IMPORTANT — Dedication ability requirements that MUST be met:")
+        for req in dedication_requirements:
+            parts.append(f"  - {req}")
+        parts.append("Rank these abilities high enough to reach the required scores.")
+    parts.append("Free ability boosts will be distributed in this priority order.")
+    parts.append("")
+    parts.append(f"SKILL PRIORITY: Choose {free_skill_slots} skills to train (beyond class grants).")
+    if class_fixed_skills:
+        parts.append(f"Already trained from class: {', '.join(s.title() for s in class_fixed_skills)}")
+    parts.append(f"Available skills: {', '.join(s.title() for s in _ALL_SKILLS)}")
+    parts.append("Pick skills that support the build concept and feat prerequisites.")
+    parts.append("")
+    parts.append("BACKGROUND: Choose a background that fits the concept and provides useful skill training and ability boosts.")
+    if available_heritages:
+        parts.append(f"HERITAGE: Choose a heritage for this {ancestry_name.title()}.")
+    return "\n".join(parts)
+
+
+_ABILITY_NAMES = ["str", "dex", "con", "int", "wis", "cha"]
+
+
+def build_priority_schema(
+    free_skill_slots: int,
+    available_backgrounds: list[str] | None = None,
+    available_heritages: list[str] | None = None,
+) -> dict:
+    """Schema for the priority call response."""
+    props = {
+        "ability_priority": {
+            "type": "array",
+            "items": {"type": "string", "enum": _ABILITY_NAMES},
+            "minItems": 6,
+            "maxItems": 6,
+        },
+        "skill_priority": {
+            "type": "array",
+            "items": {"type": "string", "enum": list(_ALL_SKILLS)},
+            "minItems": min(free_skill_slots, len(_ALL_SKILLS)),
+            "maxItems": max(free_skill_slots, 1),
+        },
+        "background": {"type": "string"},
+        "heritage": {"type": "string"},
+    }
+    required = ["ability_priority", "skill_priority", "background", "heritage"]
+
+    if available_backgrounds:
+        props["background"]["enum"] = available_backgrounds
+    if available_heritages:
+        props["heritage"]["enum"] = available_heritages
+
+    return {
+        "type": "object",
+        "properties": props,
+        "required": required,
+    }
+
+
+_SLOT_SYSTEM_PROMPT = """\
+You are an expert Pathfinder 2nd Edition character builder selecting one feat at a time.
+
+Choose the BEST option for this slot that:
+- Matches the build concept
+- Synergizes with feats already chosen
+- Considers future feat prerequisites you might want
+
+Output ONLY valid JSON matching the schema provided."""
+
+
+def build_slot_prompt(
+    request: str,
+    slot_type: str,
+    slot_level: int,
+    filtered_candidates: list[str],
+    state_summary: str,
+) -> str:
+    """Build a narrow prompt for a single slot decision."""
+    parts = []
+    parts.append(f"Build concept: {request}")
+    parts.append("")
+    parts.append(state_summary)
+    parts.append("")
+    parts.append(f"=== {slot_type.upper().replace('_', ' ')} at Level {slot_level} ===")
+    parts.append(f"Choose ONE from these {len(filtered_candidates)} options:")
+    for name in filtered_candidates:
+        parts.append(f"  - {name}")
+    return "\n".join(parts)
+
+
+def build_slot_schema(filtered_candidates: list[str]) -> dict:
+    """Schema for a single slot decision — one enum field."""
+    return {
+        "type": "object",
+        "properties": {
+            "choice": {"type": "string", "enum": filtered_candidates},
+        },
+        "required": ["choice"],
+    }
+
+
+def build_skill_increase_prompt(
+    request: str,
+    slot_level: int,
+    eligible_skills: list[str],
+    state_summary: str,
+) -> str:
+    """Build prompt for a skill increase slot."""
+    parts = []
+    parts.append(f"Build concept: {request}")
+    parts.append("")
+    parts.append(state_summary)
+    parts.append("")
+    parts.append(f"=== SKILL INCREASE at Level {slot_level} ===")
+    parts.append("Choose ONE skill to increase in proficiency rank:")
+    for name in eligible_skills:
+        parts.append(f"  - {name}")
+    parts.append("")
+    parts.append("Prioritize skills needed for feat prerequisites, then skills that match the build concept.")
+    return "\n".join(parts)
+
+
+def build_state_summary(state) -> str:
+    """Build a human-readable summary of current character state for slot prompts."""
+    parts = []
+    parts.append("=== CURRENT BUILD STATE ===")
+    parts.append(f"Class: {state.class_name.title()}, Ancestry: {state.ancestry_name.title()}, Level: {state.character_level}")
+
+    if state.feats_chosen:
+        by_level: dict[int, list[str]] = {}
+        for f in state.feats_chosen:
+            by_level.setdefault(f.character_level, []).append(f.name)
+        for lvl in sorted(by_level):
+            parts.append(f"  L{lvl}: {', '.join(by_level[lvl])}")
+    else:
+        parts.append("  No feats chosen yet.")
+
+    if state.dedications_taken:
+        parts.append(f"Dedications: {', '.join(d.title() for d in state.dedications_taken)}")
+
+    trained = [f"{s.title()} ({r})" for s, r in sorted(state.skills.items()) if r != "untrained"]
+    if trained:
+        parts.append(f"Skills: {', '.join(trained)}")
+
+    return "\n".join(parts)
+
+
+_ASSEMBLY_SYSTEM_PROMPT = """\
+You are an expert Pathfinder 2nd Edition character builder. Given a complete build \
+(class, ancestry, feats, ability scores, skills), choose appropriate starting equipment \
+and write a brief build rationale.
+
+Output ONLY valid JSON matching the schema provided."""
+
+
+def build_assembly_prompt(
+    request: str,
+    build_summary: str,
+) -> str:
+    """Build prompt for the final assembly call (equipment + notes)."""
+    parts = []
+    parts.append(f"Build concept: {request}")
+    parts.append("")
+    parts.append(build_summary)
+    parts.append("")
+    parts.append("Choose starting equipment appropriate for this build and write a brief rationale.")
+    return "\n".join(parts)
+
+
+def build_assembly_schema() -> dict:
+    """Schema for the assembly call response."""
+    return {
+        "type": "object",
+        "properties": {
+            "equipment": {"type": "array", "items": {"type": "string"}},
+            "notes": {"type": "string"},
+        },
+        "required": ["equipment", "notes"],
+    }
