@@ -135,6 +135,17 @@
       "difficulty": "hard"
     },
     {
+      "id": "gnome-fighter-companion-lvl17",
+      "label": "Gnome fighter with animal companion (L17)",
+      "request": "A gnome fighter who fights alongside an animal companion. Must have the Vicious Rend feat and the Terrifying Resistance skill feat.",
+      "class": "fighter",
+      "ancestry": "gnome",
+      "level": 17,
+      "dedications": null,
+      "expect_themes": ["animal companion", "intimidation", "melee", "Vicious Rend"],
+      "difficulty": "hard"
+    },
+    {
       "id": "guardian-triple-ded-support-lvl19",
       "label": "Triple dedication guardian support (L19)",
       "request": "A guardian dedicated to supporting the party with three dedications, all focused on healing, buffing, and protecting allies.",
