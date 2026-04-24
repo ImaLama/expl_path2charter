@@ -758,7 +758,7 @@ def build_priority_prompt(
             parts.append(f"  - {req}")
     parts.append("")
 
-    parts.append(f"SKILL PRIORITY: Choose {free_skill_slots} skills to train beyond class grants.")
+    parts.append(f"SKILL PRIORITY: Choose up to {free_skill_slots} skills to train beyond class grants (exact count depends on Intelligence).")
     if class_fixed_skills:
         parts.append(f"Already trained: {', '.join(s.title() for s in class_fixed_skills)}")
     parts.append(f"Available: {', '.join(s.title() for s in _ALL_SKILLS)}")

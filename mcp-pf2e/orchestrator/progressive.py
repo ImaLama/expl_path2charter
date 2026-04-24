@@ -618,13 +618,11 @@ def progressive_build(
 
     class_ts = get_class_trained_skills(class_name)
     class_key = get_class_key_ability(class_name)
-    # Estimate free skill slots using fixed-boost Int (lower bound)
     ancestry_fixed, ancestry_free, ancestry_flaws = get_ancestry_boosts(ancestry_name)
-    base_int = 10
-    if "int" in ancestry_fixed:
-        base_int += 2
-    int_mod_estimate = max(0, (base_int - 10) // 2)
-    free_skill_slots = class_ts["additional"] + int_mod_estimate
+    # Ask for generous skill priorities — the actual count depends on Int after AbilityPlan
+    # is computed. Over-requesting is harmless (compute_starting_skills uses only what it needs).
+    max_int_mod = 4  # Int 18 = +4, theoretical max at L1
+    free_skill_slots = class_ts["additional"] + max_int_mod
 
     # Extract dedication ability requirements (both for prompt and deterministic enforcement)
     dedication_requirements = []  # display strings for prompt
