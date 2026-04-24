@@ -337,8 +337,15 @@ def filter_candidates(
     chosen_lower = {f.name.lower() for f in state.feats_chosen}
     ability_scores = state.ability_plan.at_level(slot.level)
 
+    slot_category = slot.slot_type.replace("_feat", "")
+
     for opt in slot.slot_options.options:
         name_lower = opt.name.lower()
+
+        # 0. Category mismatch (feat filed in wrong directory)
+        if opt.category and opt.category != slot_category and opt.category != "":
+            result._reject(opt.name, "category_mismatch")
+            continue
 
         # 1. Duplicate check
         if name_lower not in _REPEATABLE_FEATS and name_lower in chosen_lower:
