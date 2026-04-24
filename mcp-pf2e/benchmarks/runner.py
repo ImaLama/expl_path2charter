@@ -52,7 +52,7 @@ def next_run_id(results_path: Path) -> str:
     return f"{today}_{seq:03d}"
 
 
-def run_case(case: dict, config: dict, unsupported: list[str]) -> dict:
+def run_case(case: dict, config: dict, unsupported: list[str], skip_judge: bool = False) -> dict:
     """Run a single benchmark case with a given config."""
     print(f"\n{'='*60}")
     print(f"  Case: {case['id']} — {case['label']}")
@@ -100,17 +100,21 @@ def run_case(case: dict, config: dict, unsupported: list[str]) -> dict:
             "build_json": None,
         }
 
-    print(f"\n[benchmark] Unloading generator, loading judge...")
-    _unload_all_models()
+    scores = {"theme_score": 0, "synergy_score": 0, "overall_score": 0,
+              "evaluator_notes": "judge skipped", "judge_time": 0, "judge_tokens": {}}
 
-    scores = evaluate_build(
-        request=case["request"],
-        expect_themes=case.get("expect_themes", []),
-        build_json=result.get("build_json"),
-        build_text=result.get("build_text", ""),
-        validation=result.get("validation", {}),
-        judge_model=config["judge_model"],
-    )
+    if not skip_judge:
+        print(f"\n[benchmark] Unloading generator, loading judge...")
+        _unload_all_models()
+
+        scores = evaluate_build(
+            request=case["request"],
+            expect_themes=case.get("expect_themes", []),
+            build_json=result.get("build_json"),
+            build_text=result.get("build_text", ""),
+            validation=result.get("validation", {}),
+            judge_model=config["judge_model"],
+        )
 
     validation = result.get("validation", {})
     return {
@@ -139,6 +143,7 @@ def run_benchmark(
     config_filter: list[str] | None = None,
     case_filter: list[str] | None = None,
     runs_per_case: int = 1,
+    skip_judge: bool = False,
 ):
     """Run the full cases x configs matrix."""
     suite = load_suite(suite_path)
@@ -182,7 +187,7 @@ def run_benchmark(
         for case in cases:
             for run_num in range(runs_per_case):
                 t0 = time.time()
-                case_result = run_case(case, config, unsupported)
+                case_result = run_case(case, config, unsupported, skip_judge=skip_judge)
                 wall_time = round(time.time() - t0, 2)
 
                 entry = {
@@ -274,6 +279,8 @@ def main():
                         help="Filter to specific case IDs")
     parser.add_argument("--runs-per-case", type=int, default=1,
                         help="Runs per case for variance (default: 1)")
+    parser.add_argument("--skip-judge", action="store_true",
+                        help="Skip LLM judge scoring (validity-only benchmark, much faster)")
     args = parser.parse_args()
 
     run_benchmark(
@@ -282,6 +289,7 @@ def main():
         config_filter=args.configs,
         case_filter=args.cases,
         runs_per_case=args.runs_per_case,
+        skip_judge=args.skip_judge,
     )
 
 
