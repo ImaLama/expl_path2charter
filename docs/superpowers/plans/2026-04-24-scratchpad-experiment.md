@@ -12,7 +12,7 @@ Split user prompts into static prefix / dynamic suffix for KV cache reuse.
 - [x] Keep system prompts as system role (unchanged)
 - [x] Refactor `build_plan_prompt()`: static instructions + feat options first, dynamic concept/dedications/scratchpad at end
 - [ ] Refactor `build_generation_prompt()`: same split (lower priority, Pass 2 has locked feats)
-- [ ] Verify no regression: variant (a) at n=15 serves as refactor check against historical baseline
+- [x] Verify no regression: variant (a) at n=15 serves as refactor check against historical baseline
 
 ## Phase 1: Implement Scratchpad Variants
 
@@ -39,9 +39,9 @@ Marks: `[ok]` prereqs met by starting state, `[!]` skill prereq NOT met, `[-]` a
 - [x] Extract feat option listing into shared `_build_feat_options_block()`
 - [x] Add `_check_prereq_against_starting_state()` for variant (c) annotations
 - [x] Add `scratchpad_mode` parameter to `build_plan_prompt()` ("none"/"reminder"/"annotated")
-- [ ] Wire `scratchpad_mode` through `pipeline.py` `run_build()`
+- [x] Wire `scratchpad_mode` through `pipeline.py` `run_build()`
 - [ ] Compute starting skills from class data for annotation
-- [ ] Add suite.json configs for all 6 combos
+- [x] Add suite.json configs for all 6 combos
 - [ ] Add CLI flag for scratchpad mode
 
 ## Phase 2: Run Experiment
@@ -49,33 +49,56 @@ Marks: `[ok]` prereqs met by starting state, `[!]` skill prereq NOT met, `[-]` a
 **Cases:**
 - thaum-champion (n=15 per variant)
 - dual-dedication (n=15 per variant)
-- simple-fighter (n=10 per variant — Format Tax control)
 
 **Models:**
-- Mistral Small at t=0.55 (optimal measured temp)
-- Phi-4 at t=0.25 (optimal measured temp)
+- Mistral Small at t=0.55
 
-**Total:** 2 models x 3 variants x (15+15+10) = **240 builds** (~4 hours)
+**Total:** 1 model × 3 variants × (15 + 15) = **90 builds** (~1.5 hours)
 
-## Diagnostic Matrix
+## Results (run 2026-04-24_004)
 
-| Result | Diagnosis | Next Step |
-|--------|-----------|-----------|
-| (b) helps, (c) helps more | Visibility is bottleneck, adjacency amplifies | Progressive generation with per-slot filtering |
-| (b) helps, (c) same as (b) | Reminder alone sufficient | Deploy scratchpad, defer progressive gen |
-| (b) no help, (c) helps | Need decision-adjacent info, not just reminders | Progressive generation essential |
-| Neither helps | State-tracking failure during autoregression | Decomposition (progressive gen) or grammar constraints |
+### Validity Rates
 
-## Predictions (falsifiable)
+| Variant | thaum-champion | dual-dedication | Overall |
+|---------|---------------|-----------------|---------|
+| none (baseline) | 80.0% (12/15) | 46.7% (7/15) | 63.3% |
+| reminder | 93.3% (14/15) | 40.0% (6/15) | 66.7% |
+| annotated | 93.3% (14/15) | 20.0% (3/15) | 56.7% |
 
-- Phi-4 gains more than Mistral overall (its errors map more directly to scratchpad fixes)
-- Phi-4 on thaum-champion gains >15pp absolute (baseline 7%, need to reach ~25%+)
-- Mistral's missing_prereq_feat errors persist (cheap-c can't fix dependency chains)
-- If simple-fighter regresses >15pp for either variant, the scratchpad is hurting easy cases (Format Tax)
+### Error Category Breakdown
 
-## Measurements
+| Error Type | none | reminder | annotated |
+|-----------|------|----------|-----------|
+| dedication_rule | 7 | 8 | **16** |
+| feat_prereq_chain | 2 | 5 | 3 |
+| skill_prereq | 3 | 2 | 5 |
+| duplicate | 0 | 0 | 2 |
+| proficiency_level | 0 | 0 | 2 |
 
-- Per-error-category deltas (primary metric, not just overall validity)
-- Theme/synergy scores (watch for Format Tax)
-- Paired comparison against baseline (same prompts) for higher power
-- Report per-case, not just aggregated
+### Diagnosis
+
+The aggregate null result hides a **strong case interaction**:
+
+1. **thaum-champion** (local visibility problem): 80% → 93% with both scratchpad variants. Skill-prereq errors on simple feat chains are visibility-bound — showing prereq info inline fixes them.
+
+2. **dual-dedication** (global coordination problem): 47% → 40% → **20%**. Dedication-ordering errors more than doubled with annotation (7 → 16). The extra per-feat information actively **destabilizes** the model's dedication reasoning, probably via attention displacement — per-slot detail crowds out whatever signal the model was using to track "am I allowed to take a second dedication here?"
+
+**Two different failure modes require two different fixes:**
+- Local visibility → progressive generation (per-slot candidate filtering with running state)
+- Global coordination → deterministic locked slots (path-seeking architecture, not LLM reasoning)
+
+### Diagnostic Matrix Outcome
+
+Does not cleanly map to one row. Closest to a split:
+- (b) helps on thaum-champion → **visibility is part of the bottleneck** for local decisions
+- (c) hurts dual-dedication → **state-tracking failure** for global ordering, and more info makes it worse
+
+**Implication:** Progressive generation alone would localize feat decisions (good) and pass running state (good for duplicates/skill prereqs), but would NOT solve dedication ordering. The model still can't reason about "have I taken 2+ Champion archetype feats?" even with more information. Only deterministic code handling dedication ordering fixes this — which is the locked-slot mechanism from path-seeking.
+
+### Methodology Note
+
+The experiment overturned the n=1 probe's aggregate "neither helps" conclusion. The case-interaction pattern (scratchpad helps one case, actively hurts another) was invisible at n=1. This is a concrete counter-example for future "can we skip confirmation?" decisions — 1.5 hours of GPU time bought a genuinely different architectural understanding.
+
+## Architectural Recommendation
+
+**Progressive generation for free slots + path-seeking with locked slots for goal-driven requirements.** The combined architecture is motivated by this experiment more strongly than progressive generation alone, because the dual-dedication regression demonstrates that better per-slot information doesn't fix global ordering constraints.
