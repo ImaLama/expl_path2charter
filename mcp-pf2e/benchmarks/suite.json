@@ -110,6 +110,40 @@
       "dedications": null,
       "expect_themes": ["tanky", "support", "battlefield control", "frontline"],
       "difficulty": "hard"
+    },
+    {
+      "id": "thaum-dual-ded-thrown-lvl16",
+      "label": "Thrown weapon thaumaturge with dual dedication (L16)",
+      "request": "A thaumaturge who throws weapons while wielding a shield, combining divine champion protection with exemplar powers. Must have Shield Block.",
+      "class": "thaumaturge",
+      "ancestry": null,
+      "level": 16,
+      "dedications": ["champion", "exemplar"],
+      "expect_themes": ["thrown weapons", "shield", "divine protection", "exemplar"],
+      "difficulty": "hard"
+    },
+    {
+      "id": "fighter-two-handed-lvl18",
+      "label": "Two-handed weapon fighter (L18)",
+      "request": "A powerful two-handed weapon fighter built around Greater Double Slice, maximizing damage output with matched feats.",
+      "class": "fighter",
+      "ancestry": null,
+      "level": 18,
+      "background": "Warrior",
+      "dedications": [],
+      "expect_themes": ["two-handed", "damage", "Greater Double Slice", "martial"],
+      "difficulty": "hard"
+    },
+    {
+      "id": "guardian-triple-ded-support-lvl19",
+      "label": "Triple dedication guardian support (L19)",
+      "request": "A guardian dedicated to supporting the party with three dedications, all focused on healing, buffing, and protecting allies.",
+      "class": "guardian",
+      "ancestry": null,
+      "level": 19,
+      "dedications": null,
+      "expect_themes": ["healing", "support", "protection", "multiclass"],
+      "difficulty": "hard"
     }
   ],
   "run_configs": [
