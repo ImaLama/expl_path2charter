@@ -146,6 +146,17 @@
       "difficulty": "hard"
     },
     {
+      "id": "fighter-dual-rapier-scholar-lvl17",
+      "label": "Dual-rapier scholarly fighter (L17)",
+      "request": "A dual-rapier fighter who excels at rapid strikes with finesse weapons. Must have Two-Weapon Flurry. An avid reader and scholar outside of combat, reflected in background and skills.",
+      "class": "fighter",
+      "ancestry": null,
+      "level": 17,
+      "dedications": null,
+      "expect_themes": ["dual wield", "finesse", "Two-Weapon Flurry", "scholar", "reading"],
+      "difficulty": "hard"
+    },
+    {
       "id": "guardian-triple-ded-support-lvl19",
       "label": "Triple dedication guardian support (L19)",
       "request": "A guardian dedicated to supporting the party with three dedications, all focused on healing, buffing, and protecting allies.",
