@@ -626,8 +626,9 @@ def progressive_build(
     int_mod_estimate = max(0, (base_int - 10) // 2)
     free_skill_slots = class_ts["additional"] + int_mod_estimate
 
-    # Extract dedication ability requirements to inform the priority call
-    dedication_requirements = []
+    # Extract dedication ability requirements (both for prompt and deterministic enforcement)
+    dedication_requirements = []  # display strings for prompt
+    required_abilities: set[str] = set()  # ability names that MUST be prioritized
     if dedications:
         from query.static_reader import list_archetype_feats
         for ded_name in dedications:
@@ -638,6 +639,9 @@ def progressive_build(
                     for p in parsed:
                         if p.type == "ability_score":
                             dedication_requirements.append(f"{f.name} requires {p.raw}")
+                            ability = p.value.split(":")[0]
+                            if ability in _ABILITIES:
+                                required_abilities.add(ability)
 
     # Get available backgrounds and heritages for the priority call
     # Only include background/heritage in the priority call if not pre-specified
@@ -697,6 +701,15 @@ def progressive_build(
         if verbose:
             print(f"[progressive] Invalid ability_priority: {ability_priority}, using fallback")
         ability_priority = ["cha", "str", "con", "dex", "wis", "int"]
+
+    # Deterministic enforcement: required abilities must be in top positions
+    if required_abilities:
+        enforced = [a for a in ability_priority if a in required_abilities]
+        rest = [a for a in ability_priority if a not in required_abilities]
+        if enforced != ability_priority[:len(enforced)]:
+            ability_priority = enforced + rest
+            if verbose:
+                print(f"[progressive] Reordered priority to ensure {required_abilities} are top-ranked")
 
     if verbose:
         print(f"[progressive] Ability priority: {ability_priority}")
