@@ -739,6 +739,10 @@ def build_priority_prompt(
 ) -> str:
     """Build prompt for the upfront priority LLM call."""
     parts = []
+    parts.append("If the build concept explicitly names a specific PF2e background or heritage "
+                 "(e.g., 'barkeep thaumaturge', 'moon elf fighter'), you MUST choose that exact one. "
+                 "Do not substitute a thematically similar alternative.")
+    parts.append("")
     parts.append(f"Build concept: {request}")
     parts.append(f"Class: {class_name.title()} (key ability: {' or '.join(a.upper() for a in class_key_abilities)})")
     parts.append(f"Ancestry: {ancestry_name.title()}")

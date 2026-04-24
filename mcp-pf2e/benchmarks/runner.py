@@ -69,6 +69,7 @@ def run_case(case: dict, config: dict, unsupported: list[str]) -> dict:
         character_level=case.get("level") or 0,
         ancestry_name=case.get("ancestry") or "",
         dedications=case.get("dedications") or [],
+        background_name=case.get("background") or "",
         provider_key=config["model"],
         max_repairs=config.get("max_repairs", 2),
         temperature=config.get("temperature", 0.7),

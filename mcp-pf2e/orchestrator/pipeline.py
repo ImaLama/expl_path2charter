@@ -472,6 +472,7 @@ def run_build(
     character_level: int = 0,
     ancestry_name: str = "",
     dedications: list[str] | None = None,
+    background_name: str = "",
     request: str = "",
     provider_key: str = "ollama-mistral-small",
     max_repairs: int = 2,
@@ -612,7 +613,8 @@ def run_build(
         if verbose:
             print(f"[pipeline] Using progressive generation mode")
         from orchestrator.progressive import progressive_build
-        background_name = result.get("skeleton", {}).get("background", "")
+        if not background_name:
+            background_name = result.get("skeleton", {}).get("background", "")
         prog_result = progressive_build(
             options=options, request=request, model=model,
             character_level=character_level, class_name=class_name,
